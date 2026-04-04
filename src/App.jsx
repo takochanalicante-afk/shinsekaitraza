@@ -1068,7 +1068,16 @@ export default function App() {
       onSnapshot(query(collection(db,"products")),                        s=>setProducts(s.docs.map(d=>({id:d.id,...d.data()}))), ()=>{}),
       onSnapshot(query(collection(db,"transfers"),orderBy("date","desc")),s=>setTransfers(s.docs.map(d=>({id:d.id,...d.data()}))), ()=>{}),
       onSnapshot(query(collection(db,"history"),  orderBy("date","desc")),s=>setHistory(s.docs.map(d=>({id:d.id,...d.data()}))), ()=>{}),
-      onSnapshot(collection(db,"categories"),                             s=>{ const docs=s.docs.map(d=>({id:d.id,...d.data()})); setCategories(docs.length?docs:DEFAULT_CATS); }, ()=>{}),
+      onSnapshot(collection(db,"categories"), s=>{
+        const docs=s.docs.map(d=>({id:d.id,...d.data()}));
+        if(docs.length===0){
+          // Seed default categories into Firebase on first use
+          DEFAULT_CATS.forEach(c=>fbSet("categories",c.id,c));
+          setCategories(DEFAULT_CATS);
+        } else {
+          setCategories(docs);
+        }
+      }, ()=>{}),
       onSnapshot(collection(db,"catalog"),                                s=>setCatalog(s.docs.map(d=>({id:d.id,...d.data()}))), ()=>{}),
       onSnapshot(query(collection(db,"users"),orderBy("name")),           s=>setUsers(s.docs.map(d=>({id:d.id,...d.data()}))), ()=>{}),
     ];
