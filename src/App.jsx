@@ -34,14 +34,203 @@ const DEFAULT_CATS = [
   { id:"otros",       label:"Otros",                   icon:"📦" },
 ];
 
+// ── Translations ──────────────────────────────────────────────────────────────
+const LANGS = { es:"🇪🇸 Español", zh:"🇨🇳 中文", ja:"🇯🇵 日本語" };
+
+const T = {
+  es: {
+    // Nav
+    dashboard:"Dashboard", restaurants:"{t("locals")}", products:"Productos",
+    transfers:"{t("transfersLabel")}", history:{t("historyLabel")}, settings:"Ajustes",
+    // Topbar
+    scan:"Scan",
+    // Dashboard
+    activeProducts:"{t("activeProducts")}", transfersLabel:"Transferencias",
+    expired:"{t("expired")}", locals:"Locales",
+    quickActions:"{t("quickActions")}", newProduct:{t("newProduct")},
+    transfer:{t("transfer")}, scanQR:{t("scanQR")}, historyLabel:"Historial",
+    recentTransfers:"Últimas transferencias",
+    // Alerts
+    expiredAlert:"producto caducado", expiredAlerts:"productos caducados",
+    nearAlert:"producto caduca pronto", nearAlerts:"productos caducan pronto",
+    // Products tab
+    searchProduct:"{t("searchProduct")}", allLocals:{t("allLocals")},
+    allStates:{t("allStates")}, ok:"OK", nearExpiry:"Caduca pronto",
+    noProducts:"{t("noProducts")}", noProductsHint:"{t("noProductsHint")}",
+    label:{t("label")}, edit:{t("edit")}, delete:{t("delete")},
+    // Transfers tab
+    noTransfers:"{t("noTransfers")}", noTransfersHint:"Usa el botón de arriba para registrar una",
+    // History tab
+    exportExcel:"Exportar Excel completo",
+    noHistory:"{t("noHistory")}",
+    creation:"Elaboración", edition:"Edición", transferEvent:"Transferencia", scanEvent:"Escaneo",
+    // Settings
+    users:"Usuarios", usersDesc:"{t("usersDesc")}",
+    newUser:"+ Nuevo",
+    categories:"Categorías",
+    catalogLabel:"Catálogo de productos",
+    exportData:"Exportar datos", exportDesc:"Excel completo: Locales, Productos, Transferencias e Historial.",
+    downloadExcel:"Descargar Excel",
+    language:"Idioma de la interfaz",
+    // User select
+    whosCooking:"{t("whosCooking")}", noUsers:"{t("noUsers")}",
+    noUsersHint:"{t("noUsersHint")}", createFirstUser:"Crear primer usuario",
+    // Modals
+    newTransfer:"Nueva transferencia", registerTransfer:"Registrar transferencia →",
+    origin:"Origen", stock:"Stock", selectProduct:"Seleccionar producto...",
+    selectDest:"Seleccionar destino...", selectDestFirst:"Selecciona un producto primero",
+    qty:"Cantidad a transferir", note:"Nota (opcional)", observations:"Observaciones...",
+    signedBy:"Firmado por",
+    remaining:"Quedan en origen", arriving:"Llegan a destino", exceedsStock:"⚠️ Supera el stock",
+    confirmTransfer:"Confirmar transferencia", back:"← Volver",
+    // Product modal
+    newProductTitle:"Nuevo producto — Plantilla", newProductForm:"Nuevo producto — Detalles",
+    editProduct:"Editar producto",
+    createFromScratch:"Crear desde cero", createFromScratchHint:"Sin usar plantilla del catálogo",
+    emptyCatalog:"Catálogo vacío", emptyCatalogHint:"Añade plantillas en Ajustes → Catálogo",
+    searchCatalog:"🔍 Buscar en el catálogo...",
+    category:"Categoría", name:"Nombre *", local:"Local *", lot:"Lote",
+    elaboration:"Elaboración", expiry:"Caducidad", quantity:"Cantidad", unit:"Unidad",
+    notesAllergens:"Notas / Alérgenos", allergenPlaceholder:"Alérgenos, ingredientes...",
+    saveChanges:"Guardar cambios", registerElab:"Registrar elaboración",
+    // Status
+    noDate:"Sin fecha", caducado:"Caducado", cadPronto:"Caduca pronto",
+    // Misc
+    cancel:"Cancelar", confirm:"Confirmar", yes:"Sí", no:"No",
+    multiLoad:"Carga múltiple", simple:"Simple", queue:"Cola",
+    queueEmpty:"Cola vacía — escanea el primer producto",
+    transferN:"Transferir", products_pl:"productos",
+    newLoad:"Nueva carga", close:"Cerrar", completed:"Completado",
+    openCamera:"Abrir cámara", selectGallery:"Seleccionar de la galería",
+    readingQR:"Leyendo QR...",
+  },
+  zh: {
+    dashboard:"仪表板", restaurants:"门店", products:"产品",
+    transfers:"调拨", history:"历史记录", settings:"设置",
+    scan:"扫描",
+    activeProducts:"在库产品", transfersLabel:"调拨记录",
+    expired:"已过期", locals:"门店",
+    quickActions:"快捷操作", newProduct:"新建产品",
+    transfer:"调拨", scanQR:"扫描二维码", historyLabel:"历史记录",
+    recentTransfers:"最近调拨",
+    expiredAlert:"个产品已过期", expiredAlerts:"个产品已过期",
+    nearAlert:"个产品即将过期", nearAlerts:"个产品即将过期",
+    searchProduct:"搜索产品或批次...", allLocals:"全部",
+    allStates:"全部状态", ok:"正常", nearExpiry:"即将过期",
+    noProducts:"暂无产品", noProductsHint:"点击 + 产品 开始添加",
+    label:"标签", edit:"编辑", delete:"删除",
+    noTransfers:"暂无调拨记录", noTransfersHint:"点击上方按钮添加",
+    exportExcel:"导出完整Excel",
+    noHistory:"暂无记录",
+    creation:"生产", edition:"编辑", transferEvent:"调拨", scanEvent:"扫描",
+    users:"用户", usersDesc:"在生产和调拨时签名",
+    newUser:"+ 新建",
+    categories:"分类",
+    catalogLabel:"产品目录",
+    exportData:"导出数据", exportDesc:"完整Excel：门店、产品、调拨记录和历史。",
+    downloadExcel:"下载Excel",
+    language:"界面语言",
+    whosCooking:"今天谁在工作？", noUsers:"尚未设置用户",
+    noUsersHint:"请先创建用户", createFirstUser:"创建第一个用户",
+    newTransfer:"新建调拨", registerTransfer:"登记调拨 →",
+    origin:"来源", stock:"库存", selectProduct:"选择产品...",
+    selectDest:"选择目标门店...", selectDestFirst:"请先选择产品",
+    qty:"调拨数量", note:"备注（可选）", observations:"备注...",
+    signedBy:"操作人",
+    remaining:"来源剩余", arriving:"到达数量", exceedsStock:"⚠️ 超出库存",
+    confirmTransfer:"确认调拨", back:"← 返回",
+    newProductTitle:"新建产品 — 模板", newProductForm:"新建产品 — 详情",
+    editProduct:"编辑产品",
+    createFromScratch:"从头创建", createFromScratchHint:"不使用模板",
+    emptyCatalog:"目录为空", emptyCatalogHint:"请在设置→目录中添加模板",
+    searchCatalog:"🔍 在目录中搜索...",
+    category:"分类", name:"名称 *", local:"门店 *", lot:"批次",
+    elaboration:"生产日期", expiry:"到期日期", quantity:"数量", unit:"单位",
+    notesAllergens:"备注 / 过敏原", allergenPlaceholder:"过敏原、成分...",
+    saveChanges:"保存修改", registerElab:"登记生产",
+    noDate:"无日期", caducado:"已过期", cadPronto:"即将过期",
+    cancel:"取消", confirm:"确认", yes:"是", no:"否",
+    multiLoad:"批量模式", simple:"单次", queue:"队列",
+    queueEmpty:"队列为空 — 扫描第一个产品",
+    transferN:"调拨", products_pl:"个产品",
+    newLoad:"新建调拨", close:"关闭", completed:"完成",
+    openCamera:"打开相机", selectGallery:"从相册选择",
+    readingQR:"正在读取...",
+  },
+  ja: {
+    dashboard:"ダッシュボード", restaurants:"店舗", products:"商品",
+    transfers:"移動", history:"履歴", settings:"設定",
+    scan:"スキャン",
+    activeProducts:"在庫商品", transfersLabel:"移動記録",
+    expired:"期限切れ", locals:"店舗",
+    quickActions:"クイック操作", newProduct:"新規商品",
+    transfer:"移動", scanQR:"QRスキャン", historyLabel:"履歴",
+    recentTransfers:"最近の移動",
+    expiredAlert:"商品が期限切れ", expiredAlerts:"商品が期限切れ",
+    nearAlert:"商品がもうすぐ期限切れ", nearAlerts:"商品がもうすぐ期限切れ",
+    searchProduct:"商品またはロットを検索...", allLocals:"すべて",
+    allStates:"すべての状態", ok:"正常", nearExpiry:"期限間近",
+    noProducts:"商品なし", noProductsHint:"+ 商品 をタップして追加",
+    label:"ラベル", edit:"編集", delete:"削除",
+    noTransfers:"移動記録なし", noTransfersHint:"上のボタンで追加",
+    exportExcel:"Excel全体をエクスポート",
+    noHistory:"記録なし",
+    creation:"製造", edition:"編集", transferEvent:"移動", scanEvent:"スキャン",
+    users:"ユーザー", usersDesc:"製造・移動時に署名",
+    newUser:"+ 新規",
+    categories:"カテゴリー",
+    catalogLabel:"商品カタログ",
+    exportData:"データエクスポート", exportDesc:"完全Excel：店舗、商品、移動記録、履歴。",
+    downloadExcel:"Excelダウンロード",
+    language:"インターフェース言語",
+    whosCooking:"今日の担当者は？", noUsers:"ユーザー未設定",
+    noUsersHint:"まずユーザーを作成してください", createFirstUser:"最初のユーザーを作成",
+    newTransfer:"新規移動", registerTransfer:"移動を登録 →",
+    origin:"出発地", stock:"在庫", selectProduct:"商品を選択...",
+    selectDest:"移動先を選択...", selectDestFirst:"先に商品を選択",
+    qty:"移動数量", note:"メモ（任意）", observations:"メモ...",
+    signedBy:"担当者",
+    remaining:"出発地残量", arriving:"到着数量", exceedsStock:"⚠️ 在庫超過",
+    confirmTransfer:"移動を確認", back:"← 戻る",
+    newProductTitle:"新規商品 — テンプレート", newProductForm:"新規商品 — 詳細",
+    editProduct:"商品を編集",
+    createFromScratch:"ゼロから作成", createFromScratchHint:"テンプレートを使わない",
+    emptyCatalog:"カタログが空", emptyCatalogHint:"設定→カタログでテンプレートを追加",
+    searchCatalog:"🔍 カタログを検索...",
+    category:"カテゴリー", name:"名前 *", local:"店舗 *", lot:"ロット",
+    elaboration:"製造日", expiry:"賞味期限", quantity:"数量", unit:"単位",
+    notesAllergens:"メモ / アレルゲン", allergenPlaceholder:"アレルゲン、原材料...",
+    saveChanges:"変更を保存", registerElab:"製造を登録",
+    noDate:"日付なし", caducado:"期限切れ", cadPronto:"期限間近",
+    cancel:"キャンセル", confirm:"確認", yes:"はい", no:"いいえ",
+    multiLoad:"まとめモード", simple:"単体", queue:"キュー",
+    queueEmpty:"キューが空 — 最初の商品をスキャン",
+    transferN:"移動", products_pl:"商品",
+    newLoad:"新規移動", close:"閉じる", completed:"完了",
+    openCamera:"カメラを開く", selectGallery:"ギャラリーから選択",
+    readingQR:"読み取り中...",
+  },
+};
+
+function useLang() {
+  const [lang, setLang] = useState(() => localStorage.getItem("trazapro_lang") || "es");
+  const changeLang = (l) => { setLang(l); localStorage.setItem("trazapro_lang", l); };
+  const t = (key) => T[lang]?.[key] || T.es[key] || key;
+  return { lang, changeLang, t, LANGS };
+}
+
+
+// ── Default units ────────────────────────────────────────────────────────────
+const DEFAULT_UNITS = ["kg","g","l","ml","ud","raciones","bandejas","porciones","cajas","bolsas","latas","botellas","sobres"];
+
 // ── Nav ───────────────────────────────────────────────────────────────────────
 const NAVS = [
-  { id:"dashboard",   icon:"⊞", l:"Dashboard" },
-  { id:"restaurants", icon:"🏠", l:"Locales" },
-  { id:"products",    icon:"⬡", l:"Productos" },
-  { id:"transfers",   icon:"⇄", l:"Transferencias" },
-  { id:"history",     icon:"📋", l:"Historial" },
-  { id:"settings",    icon:"⚙️",  l:"Ajustes" },
+  { id:"dashboard",   icon:"⊞", tk:"dashboard" },
+  { id:"restaurants", icon:"🏠", tk:"restaurants" },
+  { id:"products",    icon:"⬡", tk:"products" },
+  { id:"transfers",   icon:"⇄", tk:"transfers" },
+  { id:"history",     icon:"📋", tk:"history" },
+  { id:"settings",    icon:"⚙️",  tk:"settings" },
 ];
 
 // ── Design tokens — Warm & Clean (iPhone-first) ──────────────────────────────
@@ -194,7 +383,7 @@ async function generateQR(data) {
 }
 
 // ── USER SELECT SCREEN ────────────────────────────────────────────────────────
-function UserSelectScreen({ users, onSelect, onCreateFirst }) {
+function UserSelectScreen({ users, onSelect, onCreateFirst, t=(k)=>k }) {
   return (
     <div style={{ minHeight:"100vh", background:C.dark, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:28 }}>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
@@ -213,7 +402,7 @@ function UserSelectScreen({ users, onSelect, onCreateFirst }) {
             <div style={{ fontSize:36, marginBottom:10 }}>👤</div>
             <div style={{ color:"#fff", fontSize:15, fontWeight:600, marginBottom:6 }}>Sin usuarios configurados</div>
             <div style={{ color:C.text3, fontSize:13, marginBottom:20 }}>Crea el primer usuario para empezar</div>
-            <button onClick={onCreateFirst} style={{ ...B("orange"), fontSize:15, padding:"14px 28px", width:"100%" }}>Crear primer usuario</button>
+            <button onClick={onCreateFirst} style={{ ...B("orange"), fontSize:15, padding:"14px 28px", width:"100%" }}>{t("createFirstUser")}</button>
           </div>
         ) : (
           <div style={{ display:"grid", gap:10 }}>
@@ -783,6 +972,13 @@ function ProductModal({ product, restaurants, categories, catalog, currentUser, 
   const [f, setF] = useState(product||defaultForm);
   const [catOpen, setCatOpen] = useState(false);
   const curCat = categories.find(c=>c.id===f.category);
+  const [addingUnitForm, setAddingUnitForm] = useState(false);
+  const [customUnitForm, setCustomUnitForm] = useState("");
+  const [formUnits, setFormUnits] = useState(()=>{
+    const saved = localStorage.getItem("trazapro_units");
+    const extra = saved ? JSON.parse(saved) : [];
+    return [...DEFAULT_UNITS, ...extra.filter(u=>!DEFAULT_UNITS.includes(u))];
+  });
 
   function applyTemplate(tpl) {
     setF({ ...defaultForm, name:tpl.name, category:tpl.category, unit:tpl.unit, notes:tpl.notes||"", expiry:addDays(today(),tpl.defaultDays||7), elaboration:today() });
@@ -813,38 +1009,50 @@ function ProductModal({ product, restaurants, categories, catalog, currentUser, 
 
         {step==="pick"&&(
           <div style={{ marginTop:14, display:"flex", flexDirection:"column", gap:12 }}>
-            <input style={INP} value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Buscar en el catálogo..."/>
+            {/* Crear desde cero — ALWAYS at top */}
+            <button onClick={()=>setStep("form")}
+              style={{ ...B("ghost"), width:"100%", fontSize:14, padding:"13px 16px", display:"flex", alignItems:"center", gap:10, border:`1.5px dashed ${C.border2}`, borderRadius:14 }}>
+              <span style={{ fontSize:22 }}>✏️</span>
+              <div style={{ textAlign:"left" }}>
+                <div style={{ fontWeight:700, color:C.text }}>Crear desde cero</div>
+                <div style={{ fontSize:12, color:C.text3, marginTop:1 }}>Sin usar plantilla del catálogo</div>
+              </div>
+              <span style={{ marginLeft:"auto", color:C.text3, fontSize:18 }}>›</span>
+            </button>
+
             {catalog.length===0?(
-              <div style={{ textAlign:"center", padding:"24px 0", color:"#94a3b8" }}>
+              <div style={{ textAlign:"center", padding:"24px 0", color:C.text3 }}>
                 <div style={{ fontSize:32, marginBottom:8 }}>📋</div>
-                <div style={{ fontWeight:600 }}>Catálogo vacío</div>
-                <div style={{ fontSize:12, marginTop:4, marginBottom:14 }}>Añade plantillas en Ajustes → Catálogo</div>
-                <button onClick={()=>setStep("form")} style={{ ...B("ghost"), fontSize:13 }}>Crear sin plantilla →</button>
+                <div style={{ fontWeight:600, color:C.text2 }}>Catálogo vacío</div>
+                <div style={{ fontSize:12, marginTop:4, color:C.text3 }}>Añade plantillas en Ajustes → Catálogo</div>
               </div>
             ):(
               <>
+                {/* Search */}
+                <input style={{ ...INP, borderRadius:14 }} value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Buscar en el catálogo..."/>
+                {/* Grouped templates */}
                 {Object.entries(grouped).map(([catId,items])=>{
                   const cat=categories.find(c=>c.id===catId);
                   return(
                     <div key={catId}>
-                      <div style={{ fontSize:11, fontWeight:700, color:"#94a3b8", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:6 }}>{cat?.icon} {cat?.label||catId}</div>
+                      <div style={{ fontSize:11, fontWeight:700, color:C.text3, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>{cat?.icon} {cat?.label||catId}</div>
                       {items.map(tpl=>(
                         <button key={tpl.id} onClick={()=>applyTemplate(tpl)}
-                          style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px", cursor:"pointer", textAlign:"left", display:"flex", alignItems:"center", gap:10, width:"100%", marginBottom:6 }}>
-                          <div style={{ width:36, height:36, borderRadius:8, background:"#fff", border:"1px solid #e2e8f0", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>{cat?.icon||"📦"}</div>
+                          style={{ background:C.surface2, border:`1px solid ${C.border}`, borderRadius:14, padding:"13px 16px", cursor:"pointer", textAlign:"left", display:"flex", alignItems:"center", gap:12, width:"100%", marginBottom:8, WebkitTapHighlightColor:"transparent" }}>
+                          <div style={{ width:42, height:42, borderRadius:11, background:C.surface, border:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>{cat?.icon||"📦"}</div>
                           <div style={{ flex:1 }}>
-                            <div style={{ fontWeight:700, fontSize:13 }}>{tpl.name}</div>
-                            <div style={{ fontSize:11, color:"#94a3b8" }}>{tpl.unit} · caduca en {tpl.defaultDays}d</div>
+                            <div style={{ fontWeight:700, fontSize:15, color:C.text }}>{tpl.name}</div>
+                            <div style={{ fontSize:12, color:C.text3, marginTop:2 }}>{tpl.unit} · caduca en {tpl.defaultDays}d{tpl.notes?` · ${tpl.notes.slice(0,20)}`:""}</div>
                           </div>
-                          <span style={{ color:"#94a3b8", fontSize:18 }}>›</span>
+                          <span style={{ color:C.text3, fontSize:20 }}>›</span>
                         </button>
                       ))}
                     </div>
                   );
                 })}
-                <div style={{ borderTop:"1px solid #f1f5f9", paddingTop:12 }}>
-                  <button onClick={()=>setStep("form")} style={{ ...B("ghost"), width:"100%", fontSize:13 }}>✏️ Crear desde cero</button>
-                </div>
+                {Object.keys(grouped).length===0&&search&&(
+                  <div style={{ textAlign:"center", padding:"16px 0", color:C.text3, fontSize:13 }}>Sin resultados para "{search}"</div>
+                )}
               </>
             )}
           </div>
@@ -866,7 +1074,21 @@ function ProductModal({ product, restaurants, categories, catalog, currentUser, 
               <label style={LBL}>Elaboración<input style={INP} type="date" value={f.elaboration} onChange={e=>setF({...f,elaboration:e.target.value})}/></label>
               <label style={LBL}>Caducidad<input style={INP} type="date" value={f.expiry} onChange={e=>setF({...f,expiry:e.target.value})}/></label>
               <label style={LBL}>Cantidad<input style={INP} type="number" min="0" value={f.quantity} onChange={e=>setF({...f,quantity:e.target.value})} placeholder="0"/></label>
-              <label style={LBL}>Unidad<select style={INP} value={f.unit} onChange={e=>setF({...f,unit:e.target.value})}>{["kg","g","l","ml","ud","raciones","bandejas","porciones"].map(u=><option key={u}>{u}</option>)}</select></label>
+              <div>
+                <label style={LBL}>Unidad
+                  <select style={INP} value={f.unit} onChange={e=>{ if(e.target.value==="__new__") setAddingUnitForm(true); else setF({...f,unit:e.target.value}); }}>
+                    {formUnits.map(u=><option key={u} value={u}>{u}</option>)}
+                    <option value="__new__">+ Nueva unidad...</option>
+                  </select>
+                </label>
+                {addingUnitForm&&(
+                  <div style={{ display:"flex", gap:6, marginTop:6 }}>
+                    <input style={{ ...INP, flex:1, padding:"8px 10px", fontSize:13 }} value={customUnitForm} onChange={e=>setCustomUnitForm(e.target.value)} placeholder="Ej: pallets" autoFocus onKeyDown={e=>{ if(e.key==="Enter"){ const u=customUnitForm.trim(); if(u&&!formUnits.includes(u)){const nu=[...formUnits,u];setFormUnits(nu);const s=JSON.parse(localStorage.getItem("trazapro_units")||"[]");localStorage.setItem("trazapro_units",JSON.stringify([...s,u]));setF({...f,unit:u});}setCustomUnitForm("");setAddingUnitForm(false);}}}/>
+                    <button onClick={()=>{ const u=customUnitForm.trim(); if(u&&!formUnits.includes(u)){const nu=[...formUnits,u];setFormUnits(nu);const s=JSON.parse(localStorage.getItem("trazapro_units")||"[]");localStorage.setItem("trazapro_units",JSON.stringify([...s,u]));setF({...f,unit:u});}setCustomUnitForm("");setAddingUnitForm(false);}} style={{ ...B("orange"), padding:"8px 12px", fontSize:13 }}>+</button>
+                    <button onClick={()=>{setAddingUnitForm(false);setCustomUnitForm("");}} style={{ ...B("ghost"), padding:"8px 10px", fontSize:13 }}>✕</button>
+                  </div>
+                )}
+              </div>
             </div>
             <label style={LBL}>Notas / Alérgenos<textarea style={{ ...INP, resize:"vertical", height:60 }} value={f.notes} onChange={e=>setF({...f,notes:e.target.value})} placeholder="Alérgenos, ingredientes..."/></label>
             <button onClick={()=>{if(!f.name||!f.restaurantId)return;onSave({...f,id:f.id||uid(),createdBy:currentUser?.id||""});onClose();}} style={{ ...B("primary"), width:"100%" }} disabled={!f.name||!f.restaurantId}>
@@ -929,7 +1151,7 @@ function TransferModal({ products, restaurants, currentUser, onClose, onSave }) 
 }
 
 // ── SIDEBAR ─────────────────────────────────────────────────────────────────
-function Sidebar({ open, onClose, tab, setTab, restsCount, allCount, currentUser, onChangeUser, onNewProduct, onExport, onScan }) {
+function Sidebar({ open, onClose, tab, setTab, restsCount, allCount, currentUser, onChangeUser, onNewProduct, onExport, onScan, t=(k)=>k }) {
   return (
     <>
       <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:200, background:"rgba(20,15,8,0.55)", backdropFilter:"blur(3px)", opacity:open?1:0, pointerEvents:open?"auto":"none", transition:"opacity .2s" }}/>
@@ -970,7 +1192,7 @@ function Sidebar({ open, onClose, tab, setTab, restsCount, allCount, currentUser
               <button key={n.id} onClick={() => { setTab(n.id); onClose(); }}
                 style={{ width:"100%", display:"flex", alignItems:"center", gap:14, padding:"13px 14px", borderRadius:12, border:"none", cursor:"pointer", marginBottom:4, textAlign:"left", background:active?"rgba(212,98,42,.18)":"transparent", color:active?C.accentL:"rgba(255,255,255,.55)", fontWeight:active?700:400, fontSize:15, WebkitTapHighlightColor:"transparent", transition:"background .15s" }}>
                 <span style={{ fontSize:20, width:24, textAlign:"center", opacity:active?1:0.7 }}>{n.icon}</span>
-                <span style={{ flex:1 }}>{n.l}</span>
+                <span style={{ flex:1 }}>{t(n.tk)}</span>
                 {badge != null && badge > 0 && (
                   <span style={{ background:active?C.accent:"rgba(255,255,255,.15)", color:active?"#fff":"rgba(255,255,255,.7)", borderRadius:20, padding:"2px 8px", fontSize:12, fontWeight:700 }}>{badge}</span>
                 )}
@@ -989,11 +1211,11 @@ function Sidebar({ open, onClose, tab, setTab, restsCount, allCount, currentUser
           </button>
           <button onClick={() => { onScan(); onClose(); }}
             style={{ width:"100%", textAlign:"left", display:"flex", alignItems:"center", gap:10, fontSize:14, background:"rgba(255,255,255,.07)", color:"rgba(255,255,255,.8)", border:"1px solid rgba(255,255,255,.12)", borderRadius:12, padding:"13px 16px", cursor:"pointer", fontWeight:600, WebkitTapHighlightColor:"transparent" }}>
-            <span style={{ fontSize:18 }}>📷</span> Escanear QR
+            <span style={{ fontSize:18 }}>📷</span> {t("scanQR")}
           </button>
           <button onClick={onExport}
             style={{ width:"100%", textAlign:"left", display:"flex", alignItems:"center", gap:10, fontSize:14, background:"rgba(255,255,255,.07)", color:"rgba(255,255,255,.8)", border:"1px solid rgba(255,255,255,.12)", borderRadius:12, padding:"13px 16px", cursor:"pointer", fontWeight:600, WebkitTapHighlightColor:"transparent" }}>
-            <span style={{ fontSize:18 }}>📊</span> Exportar Excel
+            <span style={{ fontSize:18 }}>📊</span> {t("exportData")}
           </button>
         </div>
       </div>
@@ -1003,6 +1225,7 @@ function Sidebar({ open, onClose, tab, setTab, restsCount, allCount, currentUser
 
 // ── MAIN APP ──────────────────────────────────────────────────────────────────
 export default function App() {
+  const { lang, changeLang, t, LANGS } = useLang();
   const [loading,      setLoading]      = useState(true);
   const [currentUser,  setCurrentUser]  = useState(null);
   const [showUserSel,  setShowUserSel]  = useState(false);
@@ -1146,7 +1369,7 @@ export default function App() {
   if (showUserSel || !currentUser) return (
     <>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}*{box-sizing:border-box;-webkit-font-smoothing:antialiased}body{margin:0;font-family:'DM Sans',system-ui,sans-serif}`}</style>
-      <UserSelectScreen users={users} onSelect={selectUser} onCreateFirst={()=>{ setShowUserSel(false); setModal("user"); setSel(null); }}/>
+      <UserSelectScreen users={users} onSelect={selectUser} onCreateFirst={()=>{ setShowUserSel(false); setModal("user"); setSel(null); }} t={t}/>
       {modal==="user"&&<UserModal user={null} restaurants={restaurants} onClose={()=>{setModal(null);if(!currentUser)setShowUserSel(true);}} onSave={async u=>{await saveUser(u);selectUser(u);}} onDelete={()=>{}}/>}
     </>
   );
@@ -1161,6 +1384,7 @@ export default function App() {
         onNewProduct={()=>{setSel(null);setModal("product");}}
         onExport={()=>exportXLS({restaurants,products,transfers,history,categories:cats,users})}
         onScan={()=>setModal("scanner")}
+        t={t}
       />
 
       {/* Topbar */}
@@ -1191,14 +1415,14 @@ export default function App() {
       <div style={{ background:C.surface, borderBottom:`1px solid ${C.border}`, padding:"12px 18px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <span style={{ fontSize:20 }}>{curNav?.icon}</span>
-          <span style={{ fontWeight:700, fontSize:17, color:C.text }}>{curNav?.l}</span>
+          <span style={{ fontWeight:700, fontSize:17, color:C.text }}>{curNav?t(curNav.tk):""}</span>
           {tab==="products"&&products.length>0&&<span style={bdg("neutral")}>{products.length}</span>}
           {tab==="restaurants"&&<span style={bdg("blue")}>{restaurants.length}</span>}
         </div>
         {/* Context action button */}
-        {tab==="products"&&<button onClick={()=>{setSel(null);setModal("product");}} style={{ ...B("orange"), padding:"10px 18px", fontSize:14 }}>+ Producto</button>}
-        {tab==="restaurants"&&<button onClick={()=>{setSel(null);setModal("restaurant");}} style={{ ...B("orange"), padding:"10px 18px", fontSize:14 }}>+ Local</button>}
-        {tab==="transfers"&&<button onClick={()=>setModal("transfer")} style={{ ...B("orange"), padding:"10px 18px", fontSize:14 }}>+ Transferir</button>}
+        {tab==="products"&&<button onClick={()=>{setSel(null);setModal("product");}} style={{ ...B("orange"), padding:"10px 18px", fontSize:14 }}>{t("newProduct")}</button>}
+        {tab==="restaurants"&&<button onClick={()=>{setSel(null);setModal("restaurant");}} style={{ ...B("orange"), padding:"10px 18px", fontSize:14 }}>{t("restaurants")}</button>}
+        {tab==="transfers"&&<button onClick={()=>setModal("transfer")} style={{ ...B("orange"), padding:"10px 18px", fontSize:14 }}>{t("transfer")}</button>}
       </div>
 
       <div style={{ maxWidth:640, margin:"0 auto", padding:"16px 14px 32px" }}>
@@ -1269,7 +1493,7 @@ export default function App() {
             {transfers.length>0&&(
               <div style={{ background:C.surface, borderRadius:16, border:`1px solid ${C.border}`, overflow:"hidden" }}>
                 <div style={{ padding:"14px 18px", borderBottom:`1px solid ${C.border}` }}>
-                  <div style={{ fontWeight:700, fontSize:14, color:C.text }}>Ultimas transferencias</div>
+                  <div style={{ fontWeight:700, fontSize:14, color:C.text }}>{t("recentTransfers")}</div>
                 </div>
                 <div style={{ padding:"0 18px" }}>
                   {transfers.slice(0,5).map(t=>{
@@ -1365,7 +1589,7 @@ export default function App() {
               ))}
             </div>
             <div style={{ display:"flex", gap:8, overflowX:"auto", paddingBottom:2 }}>
-              {[{v:"all",l:"Todos los estados"},{v:"ok",l:"✅ OK"},{v:"near",l:"⏱ Caduca pronto"},{v:"expired",l:"⚠️ Caducados"}].map(s=>(
+              {[{v:"all",l:"Todos los estados"},{v:"ok",l:{t("ok")}},{v:"near",l:{t("nearExpiry")}},{v:"expired",l:{t("expired")}}].map(s=>(
                 <button key={s.v} onClick={()=>setFSt(s.v)}
                   style={{ flexShrink:0, padding:"8px 14px", borderRadius:20, border:`1.5px solid ${fSt===s.v?C.accent:C.border}`, background:fSt===s.v?C.accentBg:C.surface, color:fSt===s.v?C.accent:C.text2, fontSize:13, fontWeight:fSt===s.v?700:400, cursor:"pointer", whiteSpace:"nowrap" }}>
                   {s.l}
@@ -1435,7 +1659,7 @@ export default function App() {
               ?<div style={{ textAlign:"center", padding:"60px 0", color:C.text3 }}>
                 <div style={{ fontSize:48, marginBottom:10 }}>⇄</div>
                 <div style={{ fontWeight:600, fontSize:16, color:C.text2 }}>Sin transferencias</div>
-                <div style={{ fontSize:13, marginTop:4 }}>Usa el boton de arriba para registrar una</div>
+                <div style={{ fontSize:13, marginTop:4 }}>{t("noTransfersHint")}</div>
               </div>
               :<div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                 {transfers.map(t=>{
@@ -1466,7 +1690,7 @@ export default function App() {
         {/* ── HISTORIAL ── */}
         {tab==="history"&&(
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-            <button onClick={()=>exportXLS({restaurants,products,transfers,history,categories:cats,users})} style={{ ...B("green"), width:"100%", fontSize:14 }}>📊 Exportar Excel completo</button>
+            <button onClick={()=>exportXLS({restaurants,products,transfers,history,categories:cats,users})} style={{ ...B("green"), width:"100%", fontSize:14 }}>{t("exportExcel")}</button>
             {history.length===0
               ?<div style={{ textAlign:"center", padding:"60px 0", color:C.text3 }}>
                 <div style={{ fontSize:48, marginBottom:10 }}>📋</div>
@@ -1522,7 +1746,7 @@ export default function App() {
             {/* Usuarios */}
             <div style={{ background:"#fff", borderRadius:14, border:"1px solid #e2e8f0", overflow:"hidden" }}>
               <div style={{ background:"#1e293b", padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                <div><div style={{ fontWeight:800, fontSize:14, color:"#fff" }}>👤 Usuarios</div><div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{users.length} usuarios · Firman elaboraciones y transferencias</div></div>
+                <div><div style={{ fontWeight:800, fontSize:14, color:"#fff" }}>{t("users")}</div><div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{users.length} usuarios · Firman elaboraciones y transferencias</div></div>
                 <button onClick={()=>{setSel(null);setModal("user");}} style={{ ...B("orange"), fontSize:12, padding:"5px 12px" }}>+ Nuevo</button>
               </div>
               <div style={{ padding:14, display:"grid", gap:7 }}>
@@ -1546,7 +1770,7 @@ export default function App() {
             {/* Categorías */}
             <div style={{ background:"#fff", borderRadius:14, border:"1px solid #e2e8f0", overflow:"hidden" }}>
               <div style={{ background:"#1e293b", padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                <div><div style={{ fontWeight:800, fontSize:14, color:"#fff" }}>🏷️ Categorías</div><div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{cats.length} categorías</div></div>
+                <div><div style={{ fontWeight:800, fontSize:14, color:"#fff" }}>{t("categories")}</div><div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{cats.length} categorías</div></div>
                 <button onClick={()=>{setSel(null);setModal("category");}} style={{ ...B("orange"), fontSize:12, padding:"5px 12px" }}>+ Nueva</button>
               </div>
               <div style={{ padding:14, display:"grid", gap:6 }}>
@@ -1564,7 +1788,7 @@ export default function App() {
             {/* Catalogo de plantillas */}
             <div style={{ background:"#fff", borderRadius:14, border:"1px solid #e2e8f0", overflow:"hidden" }}>
               <div style={{ background:"#1e293b", padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                <div><div style={{ fontWeight:800, fontSize:14, color:"#fff" }}>📋 Catalogo de productos</div><div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{catalog.length} plantillas</div></div>
+                <div><div style={{ fontWeight:800, fontSize:14, color:"#fff" }}>{t("catalogLabel")}</div><div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{catalog.length} plantillas</div></div>
                 <button onClick={()=>{setSel(null);setModal("catalog");}} style={{ ...B("orange"), fontSize:12, padding:"5px 12px" }}>+ Nueva</button>
               </div>
               <div style={{ padding:14, display:"grid", gap:7 }}>
@@ -1589,11 +1813,25 @@ export default function App() {
               </div>
             </div>
 
+            {/* Language selector */}
+            <div style={{ background:C.surface, borderRadius:14, border:`1px solid ${C.border}`, padding:18 }}>
+              <div style={{ fontWeight:700, fontSize:14, color:C.text, marginBottom:4 }}>🌐 {t("language")}</div>
+              <div style={{ fontSize:12, color:C.text2, marginBottom:14 }}>Las etiquetas se imprimen siempre en español para cumplimiento normativo.</div>
+              <div style={{ display:"flex", gap:8 }}>
+                {Object.entries(LANGS).map(([code, label]) => (
+                  <button key={code} onClick={() => changeLang(code)}
+                    style={{ flex:1, padding:"12px 6px", borderRadius:12, border:`2px solid ${lang===code?C.accent:C.border}`, background:lang===code?C.accentBg:C.surface2, color:lang===code?C.accent:C.text2, fontWeight:lang===code?800:400, fontSize:13, cursor:"pointer" }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Export */}
-            <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e2e8f0", padding:16 }}>
-              <div style={{ fontWeight:700, fontSize:14, marginBottom:6 }}>📊 Exportar datos</div>
-              <p style={{ fontSize:13, color:"#64748b", marginBottom:10 }}>Excel completo: Locales, Productos, Transferencias (con firmas) e Historial.</p>
-              <button onClick={()=>exportXLS({restaurants,products,transfers,history,categories:cats,users})} style={{ ...B("green"), width:"100%" }}>📊 Descargar Excel</button>
+            <div style={{ background:C.surface, borderRadius:12, border:`1px solid ${C.border}`, padding:16 }}>
+              <div style={{ fontWeight:700, fontSize:14, marginBottom:6 }}>📊 {t("exportData")}</div>
+              <p style={{ fontSize:13, color:C.text2, marginBottom:10 }}>{t("exportDesc")}</p>
+              <button onClick={()=>exportXLS({restaurants,products,transfers,history,categories:cats,users})} style={{ ...B("green"), width:"100%" }}>{t("downloadExcel")}</button>
             </div>
           </div>
         )}
@@ -1603,7 +1841,7 @@ export default function App() {
       {/* Modals */}
       {modal==="user"&&<UserModal user={sel?.role!==undefined?sel:null} restaurants={restaurants} onClose={()=>{setModal(null);setSel(null);}} onSave={saveUser} onDelete={deleteUser}/>}
       {modal==="catalog"&&<CatalogModal item={sel?.defaultDays!==undefined?sel:null} categories={cats} onClose={()=>{setModal(null);setSel(null);}} onSave={saveCatalogItem}/>}
-      {modal==="category"&&<div style={OVR} onClick={()=>setModal(null)}><div style={{ ...MDL, maxWidth:420 }} onClick={e=>e.stopPropagation()}><div style={MHDR}><span style={{ fontSize:12, fontWeight:700, textTransform:"uppercase", color:"#64748b" }}>{sel?"Editar categoría":"Nueva categoría"}</span><button onClick={()=>setModal(null)} style={CBTN}>✕</button></div><CategoryForm cat={sel} cats={cats} onSave={saveCategory} onClose={()=>setModal(null)}/></div></div>}
+      {modal==="category"&&<div style={OVR} onClick={()=>setModal(null)}><div style={{ ...MDL, maxWidth:420 }} onClick={e=>e.stopPropagation()}><div style={MHDR}><span style={{ fontSize:12, fontWeight:700, textTransform:"uppercase", color:C.text3 }}>{sel?"Editar categoría":"Nueva categoría"}</span><button onClick={()=>setModal(null)} style={CBTN}>✕</button></div><CategoryForm cat={sel} cats={cats} onSave={saveCategory} onDelete={sel?deleteCategory:null} onClose={()=>setModal(null)}/></div></div>}
       {modal==="restaurant"&&<RestaurantModal restaurant={sel?.cif!==undefined?sel:null} onClose={()=>{setModal(null);setSel(null);}} onSave={saveRestaurant} onDelete={deleteRestaurant} productCount={sel?products.filter(p=>p.restaurantId===sel.id).length:0}/>}
       {modal==="product"&&<ProductModal product={sel?.elaboration?sel:null} restaurants={restaurants} categories={cats} catalog={catalog} currentUser={currentUser} onClose={()=>{setModal(null);setSel(null);}} onSave={saveProduct}/>}
       {modal==="label"&&sel&&<LabelModal product={sel} restaurants={restaurants} categories={cats} users={users} onClose={()=>{setModal(null);setSel(null);}}/>}
@@ -1617,43 +1855,158 @@ export default function App() {
 // ── CATALOG ITEM MODAL ────────────────────────────────────────────────────────
 function CatalogModal({ item, categories, onClose, onSave }) {
   const isNew = !item;
-  const [f, setF] = useState(item || { name:"", category:categories[0]?.id||"otros", unit:"kg", defaultDays:7, notes:"" });
+  const [f, setF]           = useState(item || { name:"", category:categories[0]?.id||"otros", unit:"kg", defaultDays:7, notes:"", supplierBarcode:"" });
   const [daysStr, setDaysStr] = useState(String(item?.defaultDays ?? 7));
   const [catOpen, setCatOpen] = useState(false);
+  const [customUnit, setCustomUnit] = useState("");
+  const [addingUnit, setAddingUnit] = useState(false);
+  const [units, setUnits]   = useState(() => {
+    const saved = localStorage.getItem("trazapro_units");
+    const extra = saved ? JSON.parse(saved) : [];
+    return [...DEFAULT_UNITS, ...extra.filter(u => !DEFAULT_UNITS.includes(u))];
+  });
+  const [scanning, setScanning]   = useState(false);
+  const [scanErr, setScanErr]     = useState(null);
+  const [processing, setProcessing] = useState(false);
+  const scanFileRef = useRef(null);
   const curCat = categories.find(c => c.id === f.category);
+
+  function addCustomUnit() {
+    const u = customUnit.trim();
+    if (!u || units.includes(u)) return;
+    const newUnits = [...units, u];
+    setUnits(newUnits);
+    const saved = JSON.parse(localStorage.getItem("trazapro_units")||"[]");
+    localStorage.setItem("trazapro_units", JSON.stringify([...saved, u]));
+    setF({...f, unit:u});
+    setCustomUnit("");
+    setAddingUnit(false);
+  }
+
+  // Decode supplier QR or barcode from photo
+  async function handleScanFile(e) {
+    const file = e.target.files?.[0]; if(!file) return;
+    setScanErr(null); setProcessing(true);
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const img = new Image();
+      img.onload = () => {
+        const scales = [0.5, 0.25, 1.0, 0.15];
+        for (const scale of scales) {
+          const w = Math.round(img.width*scale), h = Math.round(img.height*scale);
+          const cv = document.createElement("canvas"); cv.width=w; cv.height=h;
+          const ctx = cv.getContext("2d");
+          for (const filter of ["none","contrast(2)","grayscale(1) contrast(2)"]) {
+            ctx.filter=filter; ctx.drawImage(img,0,0,w,h);
+            const id = ctx.getImageData(0,0,w,h);
+            const r = window.jsQR?.(id.data,w,h,{inversionAttempts:"attemptBoth"});
+            if (r) {
+              setProcessing(false);
+              // Try to extract product name from QR data
+              let name = "";
+              try { const parsed = JSON.parse(r.data); name = parsed.name||parsed.product||parsed.description||""; } catch {}
+              if (!name) name = r.data.slice(0,60);
+              setF(prev => ({...prev, supplierBarcode: r.data, name: prev.name || name}));
+              setScanning(false);
+              return;
+            }
+          }
+        }
+        setProcessing(false);
+        setScanErr("No se pudo leer el codigo. Intenta mas cerca con buena luz.");
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  }
+
   return (
     <div style={OVR} onClick={onClose}>
-      <div style={{ ...MDL, maxWidth:480, maxHeight:"90vh", overflowY:"auto" }} onClick={e => e.stopPropagation()}>
+      <div style={{ ...MDL, maxWidth:480, maxHeight:"92vh", overflowY:"auto" }} onClick={e => e.stopPropagation()}>
         <div style={MHDR}>
           <div>
-            <div style={{ fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:"#64748b" }}>{isNew ? "Nueva plantilla" : "Editar plantilla"}</div>
-            {!isNew && <div style={{ fontWeight:800, fontSize:15, marginTop:1 }}>{f.name}</div>}
+            <div style={{ fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.text3 }}>{isNew ? "Nueva plantilla" : "Editar plantilla"}</div>
+            {!isNew && <div style={{ fontWeight:800, fontSize:15, marginTop:1, color:C.text }}>{f.name}</div>}
           </div>
-          <button onClick={onClose} style={CBTN}>x</button>
+          <button onClick={onClose} style={CBTN}>✕</button>
         </div>
-        <div style={{ marginTop:14, display:"flex", flexDirection:"column", gap:12 }}>
+
+        <div style={{ marginTop:16, display:"flex", flexDirection:"column", gap:14 }}>
+
+          {/* Supplier QR/barcode scanner */}
+          <div style={{ background:C.accentBg, borderRadius:14, padding:14, border:`1px solid ${C.accent}33` }}>
+            <div style={{ fontWeight:700, fontSize:13, color:C.accent, marginBottom:6 }}>📦 Escanear etiqueta del proveedor</div>
+            <div style={{ fontSize:12, color:C.text2, marginBottom:10 }}>Fotografía el QR o código de barras de la etiqueta original para crear la plantilla automáticamente.</div>
+            {scanErr && <div style={{ fontSize:12, color:C.red, background:C.redBg, borderRadius:8, padding:"8px 10px", marginBottom:8 }}>{scanErr}</div>}
+            {f.supplierBarcode && (
+              <div style={{ fontSize:11, color:C.text2, background:C.surface2, borderRadius:8, padding:"6px 10px", marginBottom:8, wordBreak:"break-all" }}>
+                ✓ Codigo escaneado: <span style={{ color:C.text, fontWeight:600 }}>{f.supplierBarcode.slice(0,50)}{f.supplierBarcode.length>50?"...":""}</span>
+                <button onClick={()=>setF({...f,supplierBarcode:""})} style={{ marginLeft:8, background:"none", border:"none", cursor:"pointer", color:C.red, fontSize:11 }}>✕ Borrar</button>
+              </div>
+            )}
+            <input ref={scanFileRef} type="file" accept="image/*" capture="environment" style={{ display:"none" }} onChange={handleScanFile}/>
+            <div style={{ display:"flex", gap:8 }}>
+              <button onClick={()=>scanFileRef.current?.click()} disabled={processing}
+                style={{ ...B("orange"), flex:1, fontSize:13, padding:"11px 14px", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
+                {processing ? "Procesando..." : "📷 Abrir cámara"}
+              </button>
+              <input type="file" accept="image/*" style={{ display:"none" }} id="catScanGallery" onChange={handleScanFile}/>
+              <label htmlFor="catScanGallery" style={{ ...B("ghost"), fontSize:13, padding:"11px 14px", cursor:"pointer" }}>🖼</label>
+            </div>
+          </div>
+
+          {/* Category picker */}
           <div>
-            <div style={{ fontSize:12, fontWeight:600, color:"#475569", marginBottom:5 }}>Categoria</div>
+            <div style={{ fontSize:13, fontWeight:600, color:C.text2, marginBottom:6 }}>Categoría</div>
             {!catOpen
-              ? <button onClick={() => setCatOpen(true)} style={{ ...B("ghost"), width:"100%", textAlign:"left", display:"flex", alignItems:"center", gap:8 }}>{curCat?.icon||"📦"} {curCat?.label||"Seleccionar..."}<span style={{ marginLeft:"auto", color:"#94a3b8" }}>▾</span></button>
-              : <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:5, maxHeight:200, overflowY:"auto" }}>
-                  {categories.map(c => <button key={c.id} onClick={() => { setF({...f, category:c.id}); setCatOpen(false); }} style={{ ...B(f.category===c.id?"primary":"ghost"), textAlign:"left", padding:"6px 9px", fontSize:12, display:"flex", alignItems:"center", gap:5 }}>{c.icon} {c.label}</button>)}
+              ? <button onClick={() => setCatOpen(true)} style={{ ...B("ghost"), width:"100%", textAlign:"left", display:"flex", alignItems:"center", gap:8 }}>{curCat?.icon||"📦"} {curCat?.label||"Seleccionar..."}<span style={{ marginLeft:"auto", color:C.text3 }}>▾</span></button>
+              : <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, maxHeight:200, overflowY:"auto" }}>
+                  {categories.map(c => <button key={c.id} onClick={() => { setF({...f, category:c.id}); setCatOpen(false); }} style={{ ...B(f.category===c.id?"primary":"ghost"), textAlign:"left", padding:"10px 12px", fontSize:13, display:"flex", alignItems:"center", gap:6 }}>{c.icon} {c.label}</button>)}
                 </div>
             }
           </div>
-          <label style={LBL}>Nombre del producto *<input style={INP} value={f.name} onChange={e => setF({...f, name:e.target.value})} placeholder="Ej: Caldo de pollo" autoFocus/></label>
+
+          {/* Name */}
+          <label style={LBL}>Nombre del producto *<input style={INP} value={f.name} onChange={e => setF({...f, name:e.target.value})} placeholder="Ej: Caldo de pollo"/></label>
+
+          {/* Unit + days */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-            <label style={LBL}>Unidad<select style={INP} value={f.unit} onChange={e => setF({...f, unit:e.target.value})}>{["kg","g","l","ml","ud","raciones","bandejas","porciones"].map(u => <option key={u}>{u}</option>)}</select></label>
+            <div>
+              <label style={LBL}>Unidad
+                <select style={INP} value={f.unit} onChange={e => { if(e.target.value==="__new__") setAddingUnit(true); else setF({...f, unit:e.target.value}); }}>
+                  {units.map(u => <option key={u} value={u}>{u}</option>)}
+                  <option value="__new__">+ Nueva unidad...</option>
+                </select>
+              </label>
+              {addingUnit && (
+                <div style={{ display:"flex", gap:6, marginTop:6 }}>
+                  <input style={{ ...INP, flex:1, padding:"8px 10px", fontSize:13 }} value={customUnit} onChange={e=>setCustomUnit(e.target.value)} placeholder="Ej: pallets" autoFocus onKeyDown={e=>e.key==="Enter"&&addCustomUnit()}/>
+                  <button onClick={addCustomUnit} style={{ ...B("orange"), padding:"8px 12px", fontSize:13 }}>+</button>
+                  <button onClick={()=>{setAddingUnit(false);setCustomUnit("");}} style={{ ...B("ghost"), padding:"8px 10px", fontSize:13 }}>✕</button>
+                </div>
+              )}
+            </div>
             <label style={LBL}>
-              Dias de caducidad por defecto
-              <input style={INP} type="number" min="1" max="365" value={daysStr} onChange={e => { setDaysStr(e.target.value); const n = parseInt(e.target.value); if(!isNaN(n) && n > 0) setF({...f, defaultDays:n}); }} placeholder="7"/>
+              Días caducidad por defecto
+              <input style={INP} type="number" min="1" max="365" value={daysStr} onChange={e => { setDaysStr(e.target.value); const n=parseInt(e.target.value); if(!isNaN(n)&&n>0) setF({...f,defaultDays:n}); }} placeholder="7"/>
             </label>
           </div>
-          <label style={LBL}>Notas / Alergenos<textarea style={{ ...INP, resize:"vertical", height:56 }} value={f.notes} onChange={e => setF({...f, notes:e.target.value})} placeholder="Alergenos, ingredientes habituales..."/></label>
-          <div style={{ background:"#f8fafc", borderRadius:8, padding:10, fontSize:12, color:"#64748b", border:"1px solid #e2e8f0" }}>
-            La fecha de caducidad se calculara automaticamente al registrar cada elaboracion
+
+          {/* Notes */}
+          <label style={LBL}>Notas / Alérgenos<textarea style={{ ...INP, resize:"vertical", height:56 }} value={f.notes} onChange={e => setF({...f, notes:e.target.value})} placeholder="Alérgenos, ingredientes habituales..."/></label>
+
+          <div style={{ background:C.surface2, borderRadius:10, padding:"10px 12px", fontSize:12, color:C.text2 }}>
+            💡 La fecha de caducidad se calculará automáticamente al registrar cada elaboración
           </div>
-          <button onClick={() => { if(!f.name.trim()) return; onSave({...f, defaultDays:parseInt(daysStr)||f.defaultDays||7, id:f.id||("c"+Date.now().toString(36)), name:f.name.trim()}); onClose(); }} style={{ ...B("primary"), width:"100%" }} disabled={!f.name.trim()}>
+
+          <button
+            onClick={() => {
+              if(!f.name.trim()) return;
+              onSave({...f, defaultDays:parseInt(daysStr)||f.defaultDays||7, id:f.id||("c"+Date.now().toString(36)), name:f.name.trim()});
+              onClose();
+            }}
+            style={{ ...B("primary"), width:"100%" }} disabled={!f.name.trim()}>
             {isNew ? "Crear plantilla" : "Guardar cambios"}
           </button>
         </div>
@@ -1665,25 +2018,45 @@ function CatalogModal({ item, categories, onClose, onSave }) {
 // ── Category inline form ──────────────────────────────────────────────────────
 const EMOJI_LIST = ["🍲","🥣","🥩","🐟","🥦","🍝","🍰","🍞","🫙","🧆","🥤","📦","🥗","🫕","🍜","🥘","🍱","🥚","🧀","🥓","🌮","🍔","🍕","🥙","🧁","🍩","🍪","🎂","🍦","🥛","☕","🫖","🍵","🧃","🌿","🧄","🧅","🥕","🌽","🍅","🫑","🥑","🌾","🧂"];
 
-function CategoryForm({ cat, cats, onSave, onClose }) {
+function CategoryForm({ cat, cats, onSave, onDelete, onClose }) {
   const [icon, setIcon]     = useState(cat?.icon||"📦");
   const [label, setLabel]   = useState(cat?.label||"");
   const [showEmoji, setShowEmoji] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
   return (
-    <div style={{ marginTop:14, display:"flex", flexDirection:"column", gap:12 }}>
+    <div style={{ marginTop:16, display:"flex", flexDirection:"column", gap:14 }}>
       <div>
-        <div style={{ fontSize:12, fontWeight:600, color:"#475569", marginBottom:6 }}>Icono</div>
-        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
-          <div style={{ width:48, height:48, borderRadius:10, background:"#f1f5f9", border:"2px solid #e2e8f0", display:"flex", alignItems:"center", justifyContent:"center", fontSize:26 }}>{icon}</div>
+        <div style={{ fontSize:13, fontWeight:600, color:C.text2, marginBottom:8 }}>Icono</div>
+        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:10 }}>
+          <div style={{ width:52, height:52, borderRadius:14, background:C.surface2, border:`2px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:28 }}>{icon}</div>
           <div style={{ flex:1 }}>
-            <input style={{ ...INP, fontSize:18, textAlign:"center" }} value={icon} onChange={e=>setIcon(e.target.value)} placeholder="📦" maxLength={4}/>
+            <input style={{ ...INP, fontSize:20, textAlign:"center", borderRadius:12 }} value={icon} onChange={e=>setIcon(e.target.value)} placeholder="📦" maxLength={4}/>
           </div>
         </div>
-        <button onClick={()=>setShowEmoji(v=>!v)} style={{ ...B("ghost"), fontSize:12, width:"100%" }}>{showEmoji?"Ocultar":"Ver sugerencias"}</button>
-        {showEmoji&&<div style={{ display:"flex", flexWrap:"wrap", gap:5, marginTop:8, background:"#f8fafc", borderRadius:8, padding:8 }}>{EMOJI_LIST.map(e=><button key={e} onClick={()=>{setIcon(e);setShowEmoji(false);}} style={{ width:34, height:34, borderRadius:7, border:icon===e?"2px solid #f97316":"1px solid #e2e8f0", background:icon===e?"#fff7ed":"#fff", cursor:"pointer", fontSize:18 }}>{e}</button>)}</div>}
+        <button onClick={()=>setShowEmoji(v=>!v)} style={{ ...B("ghost"), fontSize:13, width:"100%" }}>{showEmoji?"Ocultar sugerencias":"Ver emojis sugeridos"}</button>
+        {showEmoji&&(
+          <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:10, background:C.surface2, borderRadius:12, padding:10 }}>
+            {EMOJI_LIST.map(e=>(
+              <button key={e} onClick={()=>{setIcon(e);setShowEmoji(false);}}
+                style={{ width:38, height:38, borderRadius:9, border:icon===e?`2px solid ${C.accent}`:`1px solid ${C.border}`, background:icon===e?C.accentBg:C.surface, cursor:"pointer", fontSize:20 }}>{e}</button>
+            ))}
+          </div>
+        )}
       </div>
       <label style={LBL}>Nombre *<input style={INP} value={label} onChange={e=>setLabel(e.target.value)} placeholder="Ej: Fondos y caldos" autoFocus/></label>
-      <button onClick={()=>{if(!label.trim())return;onSave({id:cat?.id||uid(),icon,label:label.trim()});onClose();}} style={{ ...B("primary"), width:"100%" }} disabled={!label.trim()}>{cat?"Guardar":"Crear categoría"}</button>
+      <div style={{ display:"flex", gap:8 }}>
+        <button onClick={()=>{if(!label.trim())return;onSave({id:cat?.id||uid(),icon,label:label.trim()});onClose();}} style={{ ...B("primary"), flex:1 }} disabled={!label.trim()}>{cat?"Guardar cambios":"Crear categoría"}</button>
+        {onDelete && !confirmDel && (
+          <button onClick={()=>setConfirmDel(true)} style={{ ...B("red"), flexShrink:0, padding:"14px 16px" }}>🗑</button>
+        )}
+        {onDelete && confirmDel && (
+          <div style={{ display:"flex", gap:6, flex:1 }}>
+            <button onClick={()=>{ if(cats.length<=1){alert("Debe quedar al menos una categoría.");return;} onDelete(cat.id); onClose(); }} style={{ ...B("red"), flex:1 }}>Sí, eliminar</button>
+            <button onClick={()=>setConfirmDel(false)} style={{ ...B("ghost"), flex:1 }}>No</button>
+          </div>
+        )}
+      </div>
+      {onDelete&&<div style={{ fontSize:12, color:C.text3, textAlign:"center" }}>Los productos de esta categoría pasarán a la primera disponible</div>}
     </div>
   );
 }
