@@ -44,6 +44,7 @@ const NAVS = [
   { id:"restaurants", icon:"🏠", l:"Locales" },
   { id:"products",    icon:"⬡", l:"Productos" },
   { id:"transfers",   icon:"⇄", l:"Transferencias" },
+  { id:"inventory",   icon:"📦", l:"Inventario" },
   { id:"history",     icon:"📋", l:"Historial" },
   { id:"settings",    icon:"⚙️",  l:"Ajustes" },
 ];
@@ -170,7 +171,7 @@ async function fbDel(col, id) {
 }
 
 // ── Excel export ──────────────────────────────────────────────────────────────
-function exportXLS({ restaurants, products, transfers, history, categories, users }) {
+function exportXLS({ restaurants, products, transfers, history, categories, users, inventories=[] }) {
   const wb  = XLSX.utils.book_new();
   const cats = categories.length ? categories : DEFAULT_CATS;
   const cmap = Object.fromEntries(cats.map(c => [c.id, c]));
@@ -189,6 +190,21 @@ function exportXLS({ restaurants, products, transfers, history, categories, user
   const ws3 = XLSX.utils.json_to_sheet([...history].reverse().map(h => ({ Fecha:fmt(h.date), Hora:h.time||"—", Tipo:TL[h.type]||h.type, Producto:h.productName||"—", Local:restaurants.find(r=>r.id===h.restaurantId)?.name||"—", Usuario:umap[h.userId]?.name||"—", Detalle:h.detail||"" })));
   XLSX.utils.book_append_sheet(wb, ws3, "Historial");
 
+  if (inventories.length > 0) {
+    const ws4rows = [];
+    inventories.forEach(inv => {
+      const rest = restaurants.find(r=>r.id===inv.restaurantId);
+      const cat  = (categories.length?categories:DEFAULT_CATS).find(c=>c.id===inv.categoryId);
+      const u    = users.find(u=>u.id===inv.userId);
+      (inv.items||[]).forEach(item => {
+        ws4rows.push({ Fecha:fmt(inv.date), Hora:inv.time||"—", Local:rest?.name||"—", Categoría:cat?.label||"—", Producto:item.name||"—", Unidad:item.unit||"—", "Stock previo":item.expected??""  , "Contado":item.actual??"", "Diferencia":item.diff??"", Usuario:u?.name||"—" });
+      });
+    });
+    if (ws4rows.length > 0) {
+      const ws4 = XLSX.utils.json_to_sheet(ws4rows);
+      XLSX.utils.book_append_sheet(wb, ws4, "Inventarios");
+    }
+  }
   XLSX.writeFile(wb, `TrazaPro_${today()}.xlsx`);
 }
 
@@ -731,6 +747,263 @@ function ScannerModal({ onClose, products, restaurants, users, currentUser, onSa
 
 
 
+
+// ── INVENTORY MODAL ───────────────────────────────────────────────────────────
+function InventoryModal({ restaurants, categories, products, currentUser, onClose, onSave }) {
+  const [step,       setStep]       = useState("setup"); // setup | count | confirm
+  const [restId,     setRestId]     = useState(currentUser?.restaurantId || restaurants[0]?.id || "");
+  const [catId,      setCatId]      = useState("");
+  const [items,      setItems]      = useState([]); // [{productId,name,unit,expected,actual}]
+  const [saving,     setSaving]     = useState(false);
+
+  const restOpts = restaurants.map(r=>({value:r.id, label:r.name}));
+  const catOpts  = categories.map(c=>({value:c.id, label:`${c.icon} ${c.label}`}));
+
+  function startCount() {
+    if(!restId || !catId) return;
+    const prods = products.filter(p => p.restaurantId===restId && p.category===catId);
+    setItems(prods.map(p=>({
+      productId: p.id,
+      name:      p.name,
+      unit:      p.unit || "",
+      lot:       p.lot || "",
+      expiry:    p.expiry || "",
+      expected:  p.quantity ?? "",
+      actual:    "",
+    })));
+    setStep("count");
+  }
+
+  function setActual(productId, val) {
+    setItems(prev => prev.map(i => i.productId===productId ? {...i, actual:val} : i));
+  }
+
+  function computedDiff(item) {
+    const exp = parseFloat(item.expected);
+    const act = parseFloat(item.actual);
+    if(isNaN(act)) return null;
+    if(isNaN(exp)) return act;
+    return act - exp;
+  }
+
+  async function confirm() {
+    setSaving(true);
+    const finalItems = items.map(i => ({
+      ...i,
+      diff: computedDiff(i),
+    }));
+    await onSave({
+      id:           uid(),
+      restaurantId: restId,
+      categoryId:   catId,
+      date:         today(),
+      time:         nowTime(),
+      userId:       currentUser?.id || "",
+      items:        finalItems,
+    });
+    setSaving(false);
+    onClose();
+  }
+
+  const countedItems  = items.filter(i => i.actual !== "");
+  const changedItems  = items.filter(i => {
+    const d = computedDiff(i);
+    return d !== null && d !== 0;
+  });
+  const cat = categories.find(c=>c.id===catId);
+  const rest = restaurants.find(r=>r.id===restId);
+
+  return (
+    <div style={OVR} onClick={onClose}>
+      <div style={{...MDL, width:480, maxHeight:"92vh", overflowY:"auto", padding:0}} onClick={e=>e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{padding:"14px 18px", borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, background:C.surface, zIndex:10, borderRadius:"16px 16px 0 0"}}>
+          <div>
+            <div style={{fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.text3}}>
+              {step==="setup"?"Nuevo recuento":step==="count"?"Contando stock":"Confirmar recuento"}
+            </div>
+            {step!=="setup" && <div style={{fontWeight:800, fontSize:15, color:C.text, marginTop:2}}>{cat?.icon} {cat?.label} · {rest?.name}</div>}
+          </div>
+          <button onClick={onClose} style={CBTN}>✕</button>
+        </div>
+
+        <div style={{padding:18, display:"flex", flexDirection:"column", gap:14}}>
+
+          {/* ── STEP 1: Setup ── */}
+          {step==="setup" && (
+            <>
+              <Picker label="Local" value={restId} onChange={setRestId} options={restOpts} placeholder="Seleccionar local..."/>
+              <Picker label="Categoría a contar" value={catId} onChange={setCatId} options={catOpts} placeholder="Seleccionar categoría..."/>
+              {catId && restId && (()=>{
+                const count = products.filter(p=>p.restaurantId===restId&&p.category===catId).length;
+                return (
+                  <div style={{background:C.surface2, borderRadius:12, padding:"12px 14px", fontSize:13, color:C.text2}}>
+                    {count===0
+                      ? "No hay productos de esta categoría en este local."
+                      : `${count} producto${count!==1?"s":""} para contar en este local.`
+                    }
+                  </div>
+                );
+              })()}
+              <button
+                onClick={startCount}
+                style={{...B("orange"), width:"100%", fontSize:15, padding:"15px"}}
+                disabled={!restId || !catId || products.filter(p=>p.restaurantId===restId&&p.category===catId).length===0}>
+                Iniciar recuento →
+              </button>
+            </>
+          )}
+
+          {/* ── STEP 2: Count ── */}
+          {step==="count" && (
+            <>
+              {/* Progress */}
+              <div style={{background:C.surface2, borderRadius:12, padding:"10px 14px", display:"flex", justifyContent:"space-between", alignItems:"center"}}>
+                <span style={{fontSize:13, color:C.text2}}>{countedItems.length} de {items.length} contados</span>
+                <div style={{height:6, width:120, background:C.border, borderRadius:3, overflow:"hidden"}}>
+                  <div style={{height:"100%", width:`${items.length?countedItems.length/items.length*100:0}%`, background:C.accent, borderRadius:3, transition:"width .3s"}}/>
+                </div>
+              </div>
+
+              {items.length===0 ? (
+                <div style={{textAlign:"center", padding:"30px 0", color:C.text3}}>
+                  <div style={{fontSize:36, marginBottom:8}}>{cat?.icon}</div>
+                  <div style={{fontWeight:600}}>Sin productos en este local</div>
+                </div>
+              ) : (
+                <div style={{display:"flex", flexDirection:"column", gap:8}}>
+                  {items.map(item => {
+                    const diff = computedDiff(item);
+                    const hasDiff = diff !== null && diff !== 0;
+                    const isOk   = diff !== null && diff === 0;
+                    return (
+                      <div key={item.productId} style={{background:C.surface, borderRadius:14, border:`1.5px solid ${hasDiff?C.red+"55":isOk?C.green+"55":C.border}`, padding:"12px 14px"}}>
+                        <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8}}>
+                          <div style={{flex:1, minWidth:0}}>
+                            <div style={{fontWeight:700, fontSize:14, color:C.text}}>{item.name}</div>
+                            <div style={{fontSize:12, color:C.text3, marginTop:2}}>
+                              {item.lot && `Lote: ${item.lot} · `}
+                              {item.expiry && `Cad: ${fmt(item.expiry)}`}
+                            </div>
+                          </div>
+                          {item.actual!=="" && diff!==null && (
+                            <div style={{
+                              fontSize:12, fontWeight:700, padding:"3px 10px", borderRadius:8,
+                              background:hasDiff?C.redBg:C.greenBg,
+                              color:hasDiff?C.red:C.green,
+                              flexShrink:0, marginLeft:8
+                            }}>
+                              {diff>0?"+":""}{diff} {item.unit}
+                            </div>
+                          )}
+                        </div>
+                        <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, alignItems:"flex-end"}}>
+                          <div>
+                            <div style={{fontSize:11, color:C.text3, marginBottom:4}}>Stock registrado</div>
+                            <div style={{fontSize:16, fontWeight:700, color:C.text2, padding:"10px 12px", background:C.surface2, borderRadius:10}}>
+                              {item.expected!==""?`${item.expected} ${item.unit}`:"—"}
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{fontSize:11, color:C.accent, fontWeight:600, marginBottom:4}}>Cantidad real *</div>
+                            <input
+                              style={{...INP, fontSize:16, fontWeight:700, textAlign:"center", borderColor:item.actual!==""?C.accent:C.border}}
+                              type="number" min="0" step="0.1"
+                              placeholder="0"
+                              value={item.actual}
+                              onChange={e=>setActual(item.productId, e.target.value)}
+                            />
+                          </div>
+                        </div>
+                        {item.unit && <div style={{fontSize:11, color:C.text3, textAlign:"right", marginTop:4}}>Unidad: {item.unit}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div style={{display:"flex", gap:8, position:"sticky", bottom:0, background:C.bg, paddingTop:8}}>
+                <button onClick={()=>setStep("setup")} style={{...B("ghost"), flexShrink:0}}>← Volver</button>
+                <button
+                  onClick={()=>setStep("confirm")}
+                  style={{...B("primary"), flex:1, fontSize:14}}
+                  disabled={countedItems.length===0}>
+                  Revisar y confirmar ({countedItems.length}/{items.length})
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ── STEP 3: Confirm ── */}
+          {step==="confirm" && (
+            <>
+              {/* Summary */}
+              <div style={{background:C.surface2, borderRadius:14, padding:14}}>
+                <div style={{fontWeight:700, fontSize:14, color:C.text, marginBottom:10}}>Resumen del recuento</div>
+                <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, textAlign:"center"}}>
+                  {[
+                    {l:"Contados", v:countedItems.length, c:C.text},
+                    {l:"Sin cambios", v:countedItems.length-changedItems.length, c:C.green},
+                    {l:"Con diferencia", v:changedItems.length, c:changedItems.length>0?C.red:C.text3},
+                  ].map(s=>(
+                    <div key={s.l} style={{background:C.surface, borderRadius:10, padding:"10px 6px"}}>
+                      <div style={{fontSize:22, fontWeight:800, color:s.c}}>{s.v}</div>
+                      <div style={{fontSize:11, color:C.text3, marginTop:2}}>{s.l}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Only show items with differences */}
+              {changedItems.length > 0 && (
+                <div>
+                  <div style={{fontSize:13, fontWeight:700, color:C.text, marginBottom:8}}>Productos con diferencia:</div>
+                  {changedItems.map(item => {
+                    const diff = computedDiff(item);
+                    return (
+                      <div key={item.productId} style={{display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 0", borderBottom:`1px solid ${C.border}`}}>
+                        <div style={{flex:1}}>
+                          <div style={{fontWeight:600, fontSize:14}}>{item.name}</div>
+                          <div style={{fontSize:12, color:C.text3}}>{item.expected!==""?item.expected:"—"} → {item.actual} {item.unit}</div>
+                        </div>
+                        <div style={{fontWeight:800, fontSize:14, color:diff>0?C.green:C.red, marginLeft:12}}>
+                          {diff>0?"+":""}{diff} {item.unit}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {countedItems.length < items.length && (
+                <div style={{background:C.amberBg, borderRadius:10, padding:"10px 14px", fontSize:13, color:C.amber}}>
+                  ⚠️ {items.length - countedItems.length} producto{items.length-countedItems.length!==1?"s":""} sin contar — se mantendrá su stock actual.
+                </div>
+              )}
+
+              {currentUser && (
+                <div style={{background:C.surface2, borderRadius:10, padding:"10px 14px", fontSize:13, color:C.text2}}>
+                  ✍️ Firmado por: <strong>{currentUser.name}</strong>
+                </div>
+              )}
+
+              <div style={{display:"flex", gap:8}}>
+                <button onClick={()=>setStep("count")} style={{...B("ghost"), flexShrink:0}}>← Editar</button>
+                <button onClick={confirm} disabled={saving} style={{...B("orange"), flex:1, fontSize:14}}>
+                  {saving ? "Guardando..." : "Confirmar recuento ✓"}
+                </button>
+              </div>
+            </>
+          )}
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 // ── RESTAURANT MODAL ──────────────────────────────────────────────────────────
 function RestaurantModal({ restaurant, onClose, onSave, onDelete, productCount=0 }) {
   const isNew = !restaurant;
@@ -1060,6 +1333,7 @@ export default function App() {
   const [categories,   setCategories]   = useState(DEFAULT_CATS);
   const [catalog,      setCatalog]      = useState([]);
   const [users,        setUsers]        = useState([]);
+  const [inventories,  setInventories]  = useState([]);
 
   // Subscribe to all Firestore collections
   useEffect(() => {
@@ -1080,6 +1354,7 @@ export default function App() {
       }, ()=>{}),
       onSnapshot(collection(db,"catalog"),                                s=>setCatalog(s.docs.map(d=>({id:d.id,...d.data()}))), ()=>{}),
       onSnapshot(query(collection(db,"users"),orderBy("name")),           s=>setUsers(s.docs.map(d=>({id:d.id,...d.data()}))), ()=>{}),
+      onSnapshot(query(collection(db,"inventories"),orderBy("date","desc")),s=>setInventories(s.docs.map(d=>({id:d.id,...d.data()}))), ()=>{}),
     ];
     setTimeout(()=>setLoading(false), 1200);
     return () => unsubs.forEach(u=>u());
@@ -1131,6 +1406,22 @@ export default function App() {
   async function deleteProduct(id) {
     await fbDel("products", id);
   }
+
+  async function saveInventory(inv) {
+    await fbAdd("inventories", inv);
+    for (const item of inv.items) {
+      if (item.actual !== "" && item.actual !== null && item.actual !== undefined) {
+        await fbSet("products", item.productId, { quantity: parseFloat(item.actual) });
+      }
+    }
+    const rest = restaurants.find(r=>r.id===inv.restaurantId);
+    const cat  = cats.find(c=>c.id===inv.categoryId);
+    addHistEntry("inventory", null, inv.restaurantId,
+      `Recuento de ${cat?.label||"categoria"} en ${rest?.name||"—"} · ${inv.items.length} productos`,
+      "Inventario"
+    );
+  }
+
 
   async function saveTransfer(t) {
     const p      = products.find(x=>x.id===t.productId);
@@ -1205,7 +1496,7 @@ export default function App() {
         restsCount={restaurants.length} allCount={products.length}
         currentUser={currentUser} onChangeUser={()=>setShowUserSel(true)}
         onNewProduct={()=>{setSel(null);setModal("product");}}
-        onExport={()=>exportXLS({restaurants,products,transfers,history,categories:cats,users})}
+        onExport={()=>exportXLS({restaurants,products,transfers,history,categories:cats,users,inventories})}
         onScan={()=>setModal("scanner")}
       />
 
@@ -1351,6 +1642,8 @@ export default function App() {
                   const pCount=products.filter(p=>p.restaurantId===r.id).length;
                   const expCount=products.filter(p=>p.restaurantId===r.id&&isExp(p.expiry)).length;
                   const nearCount=products.filter(p=>p.restaurantId===r.id&&isNear(p.expiry)).length;
+                  const invCount=inventories.filter(i=>i.restaurantId===r.id).length;
+                  const lastInv=inventories.find(i=>i.restaurantId===r.id);
                   return(
                     <div key={r.id} style={{ background:C.surface, borderRadius:18, border:`1px solid ${C.border}`, overflow:"hidden", boxShadow:"0 2px 8px rgba(0,0,0,.06)" }}>
                       {/* Header */}
@@ -1371,6 +1664,7 @@ export default function App() {
                           <div style={{ textAlign:"center" }}><div style={{ fontSize:24, fontWeight:800, color:"#fff" }}>{pCount}</div><div style={{ fontSize:11, color:"rgba(255,255,255,.5)" }}>productos</div></div>
                           {expCount>0&&<div style={{ textAlign:"center" }}><div style={{ fontSize:24, fontWeight:800, color:"#FF8A80" }}>{expCount}</div><div style={{ fontSize:11, color:"rgba(255,255,255,.5)" }}>caducados</div></div>}
                           {nearCount>0&&<div style={{ textAlign:"center" }}><div style={{ fontSize:24, fontWeight:800, color:"#FFD180" }}>{nearCount}</div><div style={{ fontSize:11, color:"rgba(255,255,255,.5)" }}>proximos</div></div>}
+                          <div style={{ textAlign:"center" }}><div style={{ fontSize:24, fontWeight:800, color:"#80CBC4" }}>{invCount}</div><div style={{ fontSize:11, color:"rgba(255,255,255,.5)" }}>recuentos</div></div>
                         </div>
                       </div>
                       {/* Details */}
@@ -1384,6 +1678,12 @@ export default function App() {
                           <button onClick={()=>{setFRest(r.id);setTab("products");}} style={{ ...B("ghost"), flex:1, fontSize:13, padding:"11px 12px" }}>Ver productos</button>
                           <button onClick={()=>setModal("transfer")} style={{ ...B("blue"), flex:1, fontSize:13, padding:"11px 12px" }}>Transferir</button>
                         </div>
+                        {lastInv && (
+                          <div style={{ marginTop:8, fontSize:12, color:C.text3, display:"flex", alignItems:"center", justifyContent:"space-between", background:C.surface2, borderRadius:10, padding:"8px 12px" }}>
+                            <span>📦 Último recuento: <strong style={{ color:C.text }}>{fmt(lastInv.date)}</strong></span>
+                            <button onClick={()=>setTab("inventory")} style={{ background:"none", border:"none", cursor:"pointer", color:C.accent, fontSize:12, fontWeight:700, padding:0 }}>Ver →</button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -1509,10 +1809,88 @@ export default function App() {
           </div>
         )}
 
+        {/* ── INVENTARIO ── */}
+        {tab==="inventory"&&(
+          <div style={{display:"flex", flexDirection:"column", gap:14}}>
+
+            {/* Header action */}
+            <button onClick={()=>setModal("inventory")} style={{...B("orange"), width:"100%", fontSize:15, padding:"15px", display:"flex", alignItems:"center", justifyContent:"center", gap:10}}>
+              <span style={{fontSize:22}}>📦</span> Nuevo recuento de stock
+            </button>
+
+            {/* Last inventory per category quick view */}
+            {inventories.length===0 ? (
+              <div style={{textAlign:"center", padding:"60px 0", color:C.text3}}>
+                <div style={{fontSize:48, marginBottom:10}}>📦</div>
+                <div style={{fontWeight:600, fontSize:16, color:C.text2}}>Sin recuentos registrados</div>
+                <div style={{fontSize:13, marginTop:4}}>Pulsa el botón para hacer tu primer recuento</div>
+              </div>
+            ) : (
+              <div style={{display:"flex", flexDirection:"column", gap:10}}>
+                {inventories.map(inv=>{
+                  const rest = restaurants.find(r=>r.id===inv.restaurantId);
+                  const cat  = cats.find(c=>c.id===inv.categoryId);
+                  const u    = umap[inv.userId];
+                  const changed = (inv.items||[]).filter(i=>i.diff!==null&&i.diff!==0).length;
+                  const total   = (inv.items||[]).length;
+                  const counted = (inv.items||[]).filter(i=>i.actual!=="").length;
+                  return (
+                    <div key={inv.id} style={{background:C.surface, borderRadius:16, border:`1px solid ${C.border}`, overflow:"hidden", boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
+                      {/* Header */}
+                      <div style={{background:`linear-gradient(135deg,${C.dark},${C.darkL})`, padding:"12px 16px", display:"flex", alignItems:"center", justifyContent:"space-between"}}>
+                        <div style={{display:"flex", alignItems:"center", gap:10}}>
+                          <div style={{width:40, height:40, background:"rgba(255,255,255,.12)", borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22}}>
+                            {cat?.icon||"📦"}
+                          </div>
+                          <div>
+                            <div style={{fontWeight:800, fontSize:15, color:"#fff"}}>{cat?.label||"—"}</div>
+                            <div style={{fontSize:12, color:"rgba(255,255,255,.55)", marginTop:1}}>🏠 {rest?.name||"—"}</div>
+                          </div>
+                        </div>
+                        <div style={{textAlign:"right"}}>
+                          <div style={{fontSize:12, color:"rgba(255,255,255,.7)"}}>{fmt(inv.date)}</div>
+                          <div style={{fontSize:11, color:"rgba(255,255,255,.45)"}}>{inv.time||""}</div>
+                        </div>
+                      </div>
+                      {/* Stats */}
+                      <div style={{padding:"12px 16px"}}>
+                        <div style={{display:"flex", gap:12, marginBottom:10}}>
+                          <div style={{textAlign:"center"}}>
+                            <div style={{fontSize:20, fontWeight:800, color:C.text}}>{counted}</div>
+                            <div style={{fontSize:11, color:C.text3}}>contados</div>
+                          </div>
+                          <div style={{textAlign:"center"}}>
+                            <div style={{fontSize:20, fontWeight:800, color:changed>0?C.red:C.green}}>{changed}</div>
+                            <div style={{fontSize:11, color:C.text3}}>diferencias</div>
+                          </div>
+                          <div style={{textAlign:"center"}}>
+                            <div style={{fontSize:20, fontWeight:800, color:C.text}}>{total}</div>
+                            <div style={{fontSize:11, color:C.text3}}>total</div>
+                          </div>
+                        </div>
+                        {/* Items with differences */}
+                        {(inv.items||[]).filter(i=>i.diff!==null&&i.diff!==0).map(item=>(
+                          <div key={item.productId} style={{display:"flex", justifyContent:"space-between", alignItems:"center", padding:"6px 0", borderTop:`1px solid ${C.border}`, fontSize:13}}>
+                            <span style={{color:C.text, fontWeight:500}}>{item.name}</span>
+                            <span style={{fontWeight:700, color:item.diff>0?C.green:C.red}}>
+                              {item.diff>0?"+":""}{item.diff} {item.unit}
+                            </span>
+                          </div>
+                        ))}
+                        {u && <div style={{fontSize:12, color:C.text3, marginTop:8}}>✍️ {u.name}</div>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ── HISTORIAL ── */}
         {tab==="history"&&(
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-            <button onClick={()=>exportXLS({restaurants,products,transfers,history,categories:cats,users})} style={{ ...B("green"), width:"100%", fontSize:14 }}>Exportar Excel completo</button>
+            <button onClick={()=>exportXLS({restaurants,products,transfers,history,categories:cats,users,inventories})} style={{ ...B("green"), width:"100%", fontSize:14 }}>Exportar Excel completo</button>
             {history.length===0
               ?<div style={{ textAlign:"center", padding:"60px 0", color:C.text3 }}>
                 <div style={{ fontSize:48, marginBottom:10 }}>📋</div>
@@ -1522,10 +1900,11 @@ export default function App() {
                 {history.map((h,i)=>{
                   const p=products.find(x=>x.id===h.productId), rest=restaurants.find(r=>r.id===h.restaurantId), u=umap[h.userId];
                   const TI={
-                    created:     {i:"✨",c:C.green, bg:C.greenBg, l:"Elaboracion"},
-                    edited:      {i:"✏️",c:C.blue,  bg:C.blueBg,  l:"Edicion"},
-                    transferred: {i:"⇄", c:"#5B3D8F",bg:"#F3EEF8", l:"Transferencia"},
-                    scanned:     {i:"📷",c:C.amber, bg:C.amberBg, l:"Escaneo"},
+                    created:     {i:"✨",c:C.green,    bg:C.greenBg, l:"Elaboración"},
+                    edited:      {i:"✏️",c:C.blue,     bg:C.blueBg,  l:"Edición"},
+                    transferred: {i:"⇄", c:"#5B3D8F",  bg:"#F3EEF8", l:"Transferencia"},
+                    scanned:     {i:"📷",c:C.amber,    bg:C.amberBg, l:"Escaneo"},
+                    inventory:   {i:"📦",c:"#0891b2",  bg:"#E0F2FE", l:"Inventario"},
                   };
                   const t=TI[h.type]||{i:"•",c:C.text2,bg:C.surface2,l:h.type};
                   return(
@@ -1639,7 +2018,7 @@ export default function App() {
             <div style={{ background:C.surface, borderRadius:12, border:`1px solid ${C.border}`, padding:16 }}>
               <div style={{ fontWeight:700, fontSize:14, marginBottom:6 }}>📊 Exportar datos</div>
               <p style={{ fontSize:13, color:C.text2, marginBottom:10 }}>Excel completo: Locales, Productos, Transferencias (con firmas) e Historial.</p>
-              <button onClick={()=>exportXLS({restaurants,products,transfers,history,categories:cats,users})} style={{ ...B("green"), width:"100%" }}>Descargar Excel</button>
+              <button onClick={()=>exportXLS({restaurants,products,transfers,history,categories:cats,users,inventories})} style={{ ...B("green"), width:"100%" }}>Descargar Excel</button>
             </div>
           </div>
         )}
@@ -1654,6 +2033,7 @@ export default function App() {
       {modal==="product"&&<ProductModal product={sel?.elaboration?sel:null} restaurants={restaurants} categories={cats} catalog={catalog} currentUser={currentUser} onClose={()=>{setModal(null);setSel(null);}} onSave={saveProduct}/>}
       {modal==="label"&&sel&&<LabelModal product={sel} restaurants={restaurants} categories={cats} users={users} onClose={()=>{setModal(null);setSel(null);}}/>}
       {modal==="transfer"&&<TransferModal products={products} restaurants={restaurants} currentUser={currentUser} onClose={()=>setModal(null)} onSave={saveTransfer}/>}
+      {modal==="inventory"&&<InventoryModal restaurants={restaurants} categories={cats} products={products} currentUser={currentUser} onClose={()=>setModal(null)} onSave={saveInventory}/>}
       {modal==="scanner"&&<ScannerModal onClose={()=>setModal(null)} products={products} restaurants={restaurants} users={users} currentUser={currentUser} onSaveTransfer={saveTransfer}/>}
     </div>
   );
