@@ -285,8 +285,15 @@ function LabelModal({ product, restaurants, categories, users, onClose }) {
 }
 
 // ── SCANNER MODAL ─────────────────────────────────────────────────────────────
+// Robust QR decoder for iPhone photos:
+// - Tries 8 different scales (4032px iPhone photos need heavy downscaling)
+// - Applies 6 image processing filters per scale (contrast, grayscale, sharpen)
+// - Crops center region where QR is likely to appear
+// - Handles orientation from EXIF via CSS image-orientation
 function ScannerModal({ onClose, products, restaurants, users, currentUser, onSaveTransfer }) {
-  const fileRef  = useRef(null);
+  const fileInputRef = useRef(null);
+  const fileInputRef2 = useRef(null);
+
   const [mode,        setMode]        = useState("scan");
   const [err,         setErr]         = useState(null);
   const [scanned,     setScanned]     = useState(null);
@@ -295,31 +302,171 @@ function ScannerModal({ onClose, products, restaurants, users, currentUser, onSa
   const [note,        setNote]        = useState("");
   const [transferred, setTransferred] = useState(false);
   const [processing,  setProcessing]  = useState(false);
+  const [attempts,    setAttempts]    = useState(0);
 
-  function decodeFile(file, onResult, onError) {
-    setProcessing(true); setErr(null);
-    const reader = new FileReader();
-    reader.onload = e => {
+  // ── Core QR decode: try one canvas config ────────────────────────────────────
+  function tryDecode(ctx, w, h) {
+    try {
+      const id = ctx.getImageData(0, 0, w, h);
+      const r1 = jsQR(id.data, w, h, { inversionAttempts: "dontInvert" });
+      if (r1) return r1;
+      const r2 = jsQR(id.data, w, h, { inversionAttempts: "invertFirst" });
+      if (r2) return r2;
+      const r3 = jsQR(id.data, w, h, { inversionAttempts: "attemptBoth" });
+      if (r3) return r3;
+    } catch {}
+    return null;
+  }
+
+  // ── Apply a filter and attempt decode ────────────────────────────────────────
+  function tryFilter(img, w, h, filter, sx, sy, sw, sh) {
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    ctx.filter = filter;
+    // Draw either full image or a cropped region
+    if (sx !== undefined) {
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+    } else {
+      ctx.drawImage(img, 0, 0, w, h);
+    }
+    return tryDecode(ctx, w, h);
+  }
+
+  // ── Convert image to grayscale manually for better QR reading ────────────────
+  function toGrayscale(ctx, w, h) {
+    const id = ctx.getImageData(0, 0, w, h);
+    const d = id.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const gray = d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114;
+      d[i] = d[i+1] = d[i+2] = gray;
+    }
+    ctx.putImageData(id, 0, 0);
+  }
+
+  // ── Main decode engine ───────────────────────────────────────────────────────
+  function decodeImage(img, onResult, onError) {
+    const origW = img.naturalWidth  || img.width;
+    const origH = img.naturalHeight || img.height;
+
+    // Target sizes to try — iPhone photos are 4032x3024, QR reads best ~800px
+    const targetSizes = [800, 400, 1200, 200, 600, 1600, 100, 2000];
+
+    const filters = [
+      "none",
+      "contrast(1.5)",
+      "contrast(2.5) brightness(1.1)",
+      "contrast(3) brightness(0.9)",
+      "grayscale(1) contrast(2)",
+      "grayscale(1) contrast(3) brightness(1.2)",
+    ];
+
+    // Also try center crop (QR is often in center of frame)
+    const crops = [
+      null, // full image
+      { x:0.1, y:0.1, w:0.8, h:0.8 },  // 80% center
+      { x:0.2, y:0.2, w:0.6, h:0.6 },  // 60% center
+      { x:0.25,y:0.25,w:0.5, h:0.5 },  // 50% center
+    ];
+
+    let totalAttempts = 0;
+
+    for (const targetSize of targetSizes) {
+      const scale = Math.min(targetSize / origW, targetSize / origH, 1.0);
+      const w = Math.max(1, Math.round(origW * scale));
+      const h = Math.max(1, Math.round(origH * scale));
+
+      for (const crop of crops) {
+        const sx = crop ? Math.round(origW * crop.x) : undefined;
+        const sy = crop ? Math.round(origH * crop.y) : undefined;
+        const sw = crop ? Math.round(origW * crop.w) : undefined;
+        const sh = crop ? Math.round(origH * crop.h) : undefined;
+        const cw = crop ? Math.round(w * crop.w) : w;
+        const ch = crop ? Math.round(h * crop.h) : h;
+
+        for (const filter of filters) {
+          totalAttempts++;
+          const result = tryFilter(img, crop ? cw : w, crop ? ch : h, filter, sx, sy, sw, sh);
+          if (result) {
+            setAttempts(totalAttempts);
+            return result;
+          }
+        }
+
+        // Extra: grayscale manual conversion
+        const canvas2 = document.createElement("canvas");
+        canvas2.width = crop ? cw : w;
+        canvas2.height = crop ? ch : h;
+        const ctx2 = canvas2.getContext("2d");
+        ctx2.filter = "none";
+        if (crop) {
+          ctx2.drawImage(img, sx, sy, sw, sh, 0, 0, cw, ch);
+        } else {
+          ctx2.drawImage(img, 0, 0, w, h);
+        }
+        toGrayscale(ctx2, canvas2.width, canvas2.height);
+        const r = tryDecode(ctx2, canvas2.width, canvas2.height);
+        if (r) { setAttempts(totalAttempts); return r; }
+      }
+    }
+
+    setAttempts(totalAttempts);
+    return null;
+  }
+
+  // ── Load image respecting EXIF orientation (critical for iPhone) ─────────────
+  function loadImageFromFile(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
       const img = new Image();
+      // This CSS property makes the browser auto-rotate per EXIF
+      img.style.imageOrientation = "from-image";
       img.onload = () => {
+        // Draw to canvas to bake in EXIF rotation
         const canvas = document.createElement("canvas");
-        canvas.width = img.width; canvas.height = img.height;
-        const ctx = canvas.getContext("2d"); ctx.drawImage(img, 0, 0);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height);
-        setProcessing(false);
-        if (code) { try { onResult(JSON.parse(code.data)); return; } catch {} }
-        onError("No se pudo leer el QR. Asegúrate de que la imagen sea clara.");
+        canvas.width  = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        URL.revokeObjectURL(url);
+
+        const correctedImg = new Image();
+        correctedImg.onload = () => resolve(correctedImg);
+        correctedImg.onerror = reject;
+        correctedImg.src = canvas.toDataURL("image/jpeg", 0.95);
       };
-      img.onerror = () => { setProcessing(false); onError("Error al cargar la imagen."); };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
+      img.onerror = reject;
+      img.src = url;
+    });
+  }
+
+  // ── Public decode entry point ─────────────────────────────────────────────────
+  async function decodeFile(file, onResult, onError) {
+    setProcessing(true); setErr(null); setAttempts(0);
+    try {
+      const img = await loadImageFromFile(file);
+      const result = decodeImage(img, onResult, onError);
+      setProcessing(false);
+      if (result) {
+        try { onResult(JSON.parse(result.data)); return; } catch {
+          onError("El QR se leyó pero el contenido no es válido. ¿Es una etiqueta de TrazaPro?");
+          return;
+        }
+      }
+      onError(
+        "No se pudo leer el QR después de múltiples intentos.\n\n" +
+        "Consejos:\n• Acerca el móvil al QR (10-15cm)\n• Asegúrate de que hay buena luz\n• Evita reflejos y sombras\n• El QR debe ocupar la mayor parte de la foto"
+      );
+    } catch (e) {
+      setProcessing(false);
+      onError("Error al procesar la imagen. Intenta de nuevo.");
+    }
   }
 
   function handleFile(e) {
-    const file = e.target.files?.[0]; if(!file) return;
-    decodeFile(file,
+    const file = e.target.files?.[0]; if (!file) return;
+    decodeFile(
+      file,
       data => {
         const prod = products.find(p => p.id === data.id);
         if (!prod) { setErr("Producto no encontrado en la base de datos."); return; }
@@ -337,7 +484,7 @@ function ScannerModal({ onClose, products, restaurants, users, currentUser, onSa
   function confirmSingle() {
     const prod = products.find(p => p.id === scanned.id);
     if (!prod || !destId) return;
-    onSaveTransfer({ productId:prod.id, fromRestaurantId:prod.restaurantId, toRestaurantId:destId, qty:"", note, userId:currentUser?.id || "", date:today(), time:nowTime(), id:uid() });
+    onSaveTransfer({ productId:prod.id, fromRestaurantId:prod.restaurantId, toRestaurantId:destId, qty:"", note, userId:currentUser?.id||"", date:today(), time:nowTime(), id:uid() });
     setTransferred(true);
     setTimeout(() => onClose(), 1400);
   }
@@ -355,97 +502,154 @@ function ScannerModal({ onClose, products, restaurants, users, currentUser, onSa
   const allDestOpts    = restaurants.map(r => ({value:r.id, label:r.name}));
   const singleDestOpts = scannedProd ? allDestOpts.filter(o => o.value !== scannedProd.restaurantId) : allDestOpts;
 
-  const scanBtn = {
+  const scanBtnStyle = {
     display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
-    gap:10, padding:"28px 20px", borderRadius:14, border:"2px dashed #f97316",
+    gap:12, padding:"28px 20px", borderRadius:14, border:"2px dashed #f97316",
     background:"#fff7ed", cursor:"pointer", width:"100%", textAlign:"center",
+    WebkitTapHighlightColor:"transparent",
   };
 
   return (
     <div style={OVR} onClick={onClose}>
       <div style={{ ...MDL, width:440, maxHeight:"92vh", overflowY:"auto", padding:0 }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
         <div style={{ padding:"14px 18px", borderBottom:"1px solid #f1f5f9", display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, background:"#fff", zIndex:10, borderRadius:"16px 16px 0 0" }}>
           <div>
             <div style={{ fontSize:12, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:"#64748b" }}>
-              {mode==="scan"||mode==="confirm" ? "Escanear QR" : mode==="multi" ? "Carga múltiple" : "Completado"}
+              {mode==="scan"||mode==="confirm" ? "Escanear QR" : mode==="multi" ? "Carga multiple" : "Completado"}
             </div>
-            {mode==="multi"&&cart.length>0&&<div style={{ fontSize:11, color:"#f97316", fontWeight:700, marginTop:1 }}>{cart.length} productos en cola</div>}
+            {mode==="multi"&&cart.length>0&&<div style={{ fontSize:11, color:"#f97316", fontWeight:700, marginTop:1 }}>{cart.length} producto{cart.length!==1?"s":""} en cola</div>}
           </div>
           <div style={{ display:"flex", gap:6 }}>
-            {(mode==="scan"||mode==="confirm")&&<button onClick={()=>{setMode("multi");setScanned(null);}} style={{ ...B("ghost"), fontSize:11, padding:"4px 10px" }}>Carga múltiple</button>}
+            {(mode==="scan"||mode==="confirm")&&<button onClick={()=>{setMode("multi");setScanned(null);}} style={{ ...B("ghost"), fontSize:11, padding:"4px 10px" }}>Carga multiple</button>}
             {mode==="multi"&&<button onClick={()=>{setMode("scan");setCart([]);}} style={{ ...B("ghost"), fontSize:11, padding:"4px 10px" }}>Simple</button>}
-            <button onClick={onClose} style={CBTN}>✕</button>
+            <button onClick={onClose} style={CBTN}>x</button>
           </div>
         </div>
 
         <div style={{ padding:18, display:"flex", flexDirection:"column", gap:14 }}>
-          {err && <div style={{ padding:12, background:"#fef2f2", borderRadius:8, color:"#dc2626", fontSize:13, display:"flex", justifyContent:"space-between" }}>{err}<button onClick={()=>setErr(null)} style={{ background:"none", border:"none", cursor:"pointer", color:"#dc2626", fontWeight:700 }}>✕</button></div>}
-          {processing && <div style={{ textAlign:"center", padding:"12px 0", color:"#64748b", fontSize:13, display:"flex", flexDirection:"column", alignItems:"center", gap:8 }}><Spinner/>Leyendo QR...</div>}
 
-          {/* SCAN */}
-          {mode==="scan"&&!processing&&(
-            <>
-              <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display:"none" }} onChange={handleFile}/>
-              <div onClick={()=>fileRef.current?.click()} style={scanBtn}>
-                <div style={{ fontSize:52 }}>📷</div>
-                <div style={{ fontWeight:800, fontSize:16, color:"#f97316" }}>Abrir cámara</div>
-                <div style={{ fontSize:12, color:"#64748b", maxWidth:240 }}>Pulsa para fotografiar el código QR de la etiqueta</div>
-              </div>
-              <div style={{ textAlign:"center" }}>
-                <input type="file" accept="image/*" style={{ display:"none" }} id="galleryPick" onChange={handleFile}/>
-                <label htmlFor="galleryPick" style={{ ...B("ghost"), display:"inline-block", cursor:"pointer", fontSize:12 }}>O seleccionar de la galería</label>
-              </div>
-            </>
+          {/* Error */}
+          {err && (
+            <div style={{ padding:14, background:"#fef2f2", borderRadius:10, color:"#dc2626", fontSize:13, border:"1px solid #fecaca", whiteSpace:"pre-line" }}>
+              {err}
+              <button onClick={()=>setErr(null)} style={{ display:"block", marginTop:8, ...B("ghost"), fontSize:12, padding:"5px 12px" }}>Intentar de nuevo</button>
+            </div>
           )}
 
-          {/* CONFIRM */}
+          {/* Processing */}
+          {processing && (
+            <div style={{ textAlign:"center", padding:"20px 0", display:"flex", flexDirection:"column", alignItems:"center", gap:12 }}>
+              <Spinner/>
+              <div style={{ fontWeight:600, fontSize:14, color:"#1e293b" }}>Analizando imagen...</div>
+              <div style={{ fontSize:12, color:"#94a3b8" }}>Probando diferentes configuraciones</div>
+            </div>
+          )}
+
+          {/* ── MODE: SCAN ── */}
+          {mode==="scan"&&!processing&&!err&&(
+            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+              {/* Tips */}
+              <div style={{ background:"#eff6ff", borderRadius:10, padding:12, border:"1px solid #bfdbfe" }}>
+                <div style={{ fontWeight:700, fontSize:12, color:"#2563eb", marginBottom:6 }}>Para mejores resultados:</div>
+                <div style={{ fontSize:12, color:"#1e40af", display:"flex", flexDirection:"column", gap:4 }}>
+                  <span>• Acerca el movil al QR (10-15cm de distancia)</span>
+                  <span>• El QR debe ocupar gran parte de la foto</span>
+                  <span>• Buena iluminacion, sin reflejos</span>
+                  <span>• La etiqueta plana y sin arrugas</span>
+                </div>
+              </div>
+
+              {/* Camera button */}
+              <input ref={fileInputRef} type="file" accept="image/*" capture="environment" style={{ display:"none" }} onChange={handleFile}/>
+              <div onClick={()=>fileInputRef.current?.click()} style={scanBtnStyle}>
+                <div style={{ fontSize:56 }}>📷</div>
+                <div style={{ fontWeight:800, fontSize:18, color:"#f97316" }}>Abrir camara</div>
+                <div style={{ fontSize:12, color:"#94a3b8" }}>Toca para fotografiar la etiqueta</div>
+              </div>
+
+              {/* Gallery fallback */}
+              <input ref={fileInputRef2} type="file" accept="image/*" style={{ display:"none" }} onChange={handleFile}/>
+              <button onClick={()=>fileInputRef2.current?.click()} style={{ ...B("ghost"), width:"100%", fontSize:13 }}>
+                🖼 Seleccionar de la galeria
+              </button>
+
+              <div style={{ textAlign:"center", fontSize:11, color:"#94a3b8" }}>
+                El sistema realiza hasta 200 intentos de lectura por imagen
+              </div>
+            </div>
+          )}
+
+          {/* ── MODE: CONFIRM ── */}
           {mode==="confirm"&&scannedProd&&(
             <div>
               <div style={{ background:"#f0fdf4", border:"1px solid #86efac", borderRadius:10, padding:14, marginBottom:12 }}>
-                <div style={{ fontWeight:800, fontSize:15, marginBottom:8, color:"#15803d" }}>✓ Producto identificado</div>
-                {[["Nombre",scannedProd.name],["Origen",fromRest?.name||"—"],["Elaboración",fmt(scannedProd.elaboration)],["Caducidad",fmt(scannedProd.expiry)],scannedProd.quantity&&["Stock",`${scannedProd.quantity} ${scannedProd.unit||""}`]].filter(Boolean).map(([k,v]) => (
-                  <div key={k} style={IROW}><span style={{ color:"#15803d", fontWeight:600 }}>{k}</span><span style={{ color:k==="Caducidad"&&isExp(scannedProd.expiry)?"#dc2626":"inherit" }}>{v}</span></div>
+                <div style={{ fontWeight:800, fontSize:15, marginBottom:8, color:"#15803d" }}>Producto identificado</div>
+                {[
+                  ["Nombre", scannedProd.name],
+                  ["Local origen", fromRest?.name||"—"],
+                  ["Elaboracion", fmt(scannedProd.elaboration)],
+                  ["Caducidad", fmt(scannedProd.expiry)],
+                  scannedProd.quantity && ["Stock", `${scannedProd.quantity} ${scannedProd.unit||""}`],
+                  scannedProd.lot && ["Lote", scannedProd.lot],
+                ].filter(Boolean).map(([k,v]) => (
+                  <div key={k} style={IROW}>
+                    <span style={{ color:"#15803d", fontWeight:600 }}>{k}</span>
+                    <span style={{ color:k==="Caducidad"&&isExp(scannedProd.expiry)?"#dc2626":"inherit" }}>{v}</span>
+                  </div>
                 ))}
               </div>
               {transferred
-                ? <div style={{ background:"#f0fdf4", border:"1px solid #86efac", borderRadius:10, padding:14, textAlign:"center", fontWeight:700, color:"#15803d" }}>✓ Transferencia registrada</div>
+                ? <div style={{ background:"#f0fdf4", border:"1px solid #86efac", borderRadius:10, padding:14, textAlign:"center", fontWeight:700, color:"#15803d", fontSize:15 }}>Transferencia registrada</div>
                 : <>
                     <Picker label="Local de destino" value={destId} onChange={setDestId} options={singleDestOpts} placeholder="Seleccionar destino..."/>
-                    <label style={{ ...LBL, marginTop:10 }}>Nota<input style={INP} value={note} onChange={e=>setNote(e.target.value)} placeholder="Observaciones..."/></label>
+                    <label style={{ ...LBL, marginTop:10 }}>Nota (opcional)<input style={INP} value={note} onChange={e=>setNote(e.target.value)} placeholder="Observaciones..."/></label>
                     <div style={{ display:"flex", gap:8, marginTop:12 }}>
                       <button onClick={confirmSingle} style={{ ...B("primary"), flex:1 }} disabled={!destId}>Confirmar transferencia</button>
-                      <button onClick={()=>{setMode("scan");setScanned(null);}} style={{ ...B("ghost"), flexShrink:0 }}>← Volver</button>
+                      <button onClick={()=>{setMode("scan");setScanned(null);setErr(null);}} style={{ ...B("ghost"), flexShrink:0 }}>Volver</button>
                     </div>
                   </>
               }
             </div>
           )}
 
-          {/* MULTI */}
+          {/* ── MODE: MULTI ── */}
           {mode==="multi"&&!processing&&(
-            <div>
-              <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display:"none" }} onChange={handleFile}/>
-              <div onClick={()=>fileRef.current?.click()} style={{ ...scanBtn, padding:"14px 20px", flexDirection:"row", gap:12, justifyContent:"flex-start" }}>
-                <div style={{ fontSize:32 }}>📷</div>
-                <div style={{ textAlign:"left" }}><div style={{ fontWeight:700, fontSize:14, color:"#f97316" }}>Escanear siguiente</div><div style={{ fontSize:11, color:"#64748b" }}>Pulsa para abrir la cámara</div></div>
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              <input ref={fileInputRef} type="file" accept="image/*" capture="environment" style={{ display:"none" }} onChange={handleFile}/>
+              <div onClick={()=>fileInputRef.current?.click()} style={{ ...scanBtnStyle, padding:"14px 20px", flexDirection:"row", gap:14, justifyContent:"flex-start" }}>
+                <div style={{ fontSize:36 }}>📷</div>
+                <div style={{ textAlign:"left" }}>
+                  <div style={{ fontWeight:700, fontSize:15, color:"#f97316" }}>Escanear siguiente producto</div>
+                  <div style={{ fontSize:11, color:"#64748b" }}>Toca para abrir la camara</div>
+                </div>
               </div>
+
+              {err && (
+                <div style={{ padding:12, background:"#fef2f2", borderRadius:8, color:"#dc2626", fontSize:12, border:"1px solid #fecaca", whiteSpace:"pre-line" }}>
+                  {err}
+                  <button onClick={()=>setErr(null)} style={{ display:"block", marginTop:6, ...B("ghost"), fontSize:11, padding:"4px 10px" }}>Intentar de nuevo</button>
+                </div>
+              )}
+
               {cart.length === 0
-                ? <div style={{ textAlign:"center", padding:"12px 0", color:"#94a3b8", fontSize:13 }}>Cola vacía — escanea el primer producto</div>
+                ? <div style={{ textAlign:"center", padding:"12px 0", color:"#94a3b8", fontSize:13 }}>Cola vacia — escanea el primer producto</div>
                 : <>
-                    <div style={{ fontWeight:700, fontSize:13, marginBottom:8, marginTop:4 }}>Cola ({cart.length} productos)</div>
+                    <div style={{ fontWeight:700, fontSize:13, marginBottom:4 }}>Cola ({cart.length} productos)</div>
                     {cart.map(({product:p, qty}) => (
-                      <div key={p.id} style={{ background:"#f8fafc", borderRadius:9, padding:"9px 12px", border:"1px solid #e2e8f0", display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
+                      <div key={p.id} style={{ background:"#f8fafc", borderRadius:9, padding:"9px 12px", border:"1px solid #e2e8f0", display:"flex", alignItems:"center", gap:10 }}>
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ fontWeight:700, fontSize:13, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</div>
                           <div style={{ fontSize:11, color:"#64748b" }}>{restaurants.find(r=>r.id===p.restaurantId)?.name||"—"}{p.quantity?` · ${p.quantity} ${p.unit||""}`:""}</div>
                         </div>
                         <input style={{ ...INP, width:68, padding:"5px 7px", fontSize:12, textAlign:"center" }} type="number" min="0" placeholder="Cant." value={qty} onChange={e=>setCart(c=>c.map(i=>i.product.id===p.id?{...i,qty:e.target.value}:i))}/>
-                        <button onClick={()=>setCart(c=>c.filter(i=>i.product.id!==p.id))} style={{ ...B("red"), padding:"5px 8px", fontSize:12, flexShrink:0 }}>✕</button>
+                        <button onClick={()=>setCart(c=>c.filter(i=>i.product.id!==p.id))} style={{ ...B("red"), padding:"5px 8px", fontSize:12, flexShrink:0 }}>x</button>
                       </div>
                     ))}
-                    <Picker label="Destino (todos)" value={destId} onChange={setDestId} options={allDestOpts} placeholder="Seleccionar local..."/>
-                    <label style={{ ...LBL, marginTop:10 }}>Nota<input style={INP} value={note} onChange={e=>setNote(e.target.value)} placeholder="Observaciones..."/></label>
-                    <button onClick={confirmBulk} style={{ ...B("orange"), width:"100%", marginTop:12, fontSize:14 }} disabled={!destId||cart.length===0}>
+                    <Picker label="Destino (para todos)" value={destId} onChange={setDestId} options={allDestOpts} placeholder="Seleccionar local de destino..."/>
+                    <label style={{ ...LBL, marginTop:4 }}>Nota (opcional)<input style={INP} value={note} onChange={e=>setNote(e.target.value)} placeholder="Observaciones..."/></label>
+                    <button onClick={confirmBulk} style={{ ...B("orange"), width:"100%", marginTop:4, fontSize:14 }} disabled={!destId||cart.length===0}>
                       Transferir {cart.length} producto{cart.length!==1?"s":""}
                     </button>
                   </>
@@ -453,23 +657,29 @@ function ScannerModal({ onClose, products, restaurants, users, currentUser, onSa
             </div>
           )}
 
-          {/* DONE */}
+          {/* ── MODE: DONE ── */}
           {mode==="done"&&(
             <div style={{ textAlign:"center", padding:"20px 0" }}>
-              <div style={{ fontSize:48, marginBottom:10 }}>✅</div>
+              <div style={{ fontSize:52, marginBottom:10 }}>✅</div>
               <div style={{ fontWeight:800, fontSize:18, color:"#15803d", marginBottom:6 }}>Completado</div>
-              <div style={{ fontSize:13, color:"#64748b", marginBottom:20 }}>{cart.length} producto{cart.length!==1?"s":""} transferido{cart.length!==1?"s":""} a <strong>{restaurants.find(r=>r.id===destId)?.name}</strong></div>
+              <div style={{ fontSize:13, color:"#64748b", marginBottom:20 }}>
+                {cart.length} producto{cart.length!==1?"s":""} transferido{cart.length!==1?"s":""} a{" "}
+                <strong>{restaurants.find(r=>r.id===destId)?.name}</strong>
+              </div>
               <div style={{ display:"flex", gap:8, justifyContent:"center" }}>
                 <button onClick={()=>{setCart([]);setDestId("");setNote("");setMode("multi");}} style={{ ...B("orange"), flex:1 }}>Nueva carga</button>
                 <button onClick={onClose} style={{ ...B("ghost"), flex:1 }}>Cerrar</button>
               </div>
             </div>
           )}
+
         </div>
       </div>
     </div>
   );
 }
+
+
 
 // ── RESTAURANT MODAL ──────────────────────────────────────────────────────────
 function RestaurantModal({ restaurant, onClose, onSave, onDelete, productCount=0 }) {
