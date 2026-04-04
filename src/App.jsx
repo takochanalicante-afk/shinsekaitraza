@@ -35,6 +35,9 @@ const DEFAULT_CATS = [
 ];
 
 
+// ── Master admin PIN (default 0000, editable by admin) ───────────────────────
+const DEFAULT_MASTER_PIN = "0000";
+
 // ── Roles & Permissions ──────────────────────────────────────────────────────
 const ROLES = {
   admin:    { label:"Admin",    icon:"👑", color:"#7C3AED" },
@@ -235,52 +238,77 @@ function exportXLS({ restaurants, products, transfers, history, categories, user
 async function generateQR(data) {
   return await QRCode.toDataURL(JSON.stringify(data), { width:120, margin:1, color:{ dark:"#1e293b", light:"#ffffff" } });
 }
-
-// ── USER SELECT SCREEN ────────────────────────────────────────────────────────
-// ── USER SELECT + PIN SCREEN ──────────────────────────────────────────────────
-function UserSelectScreen({ users, onSelect, onCreateFirst }) {
+function UserSelectScreen({ users, onSelect, masterPin, onAdminAccess }) {
   const [selectedUser, setSelectedUser] = useState(null);
   const [pin, setPin]                   = useState("");
   const [error, setError]               = useState("");
   const [shake, setShake]               = useState(false);
+  // Master admin entry mode
+  const [showMaster, setShowMaster]     = useState(false);
+  const [masterEntry, setMasterEntry]   = useState("");
 
   function handleUserClick(u) {
-    setSelectedUser(u);
-    setPin("");
-    setError("");
+    setSelectedUser(u); setPin(""); setError("");
   }
 
   function handleDigit(d) {
     if (pin.length >= 4) return;
     const next = pin + d;
     setPin(next);
-    if (next.length === 4) {
-      setTimeout(() => checkPin(next), 150);
-    }
+    if (next.length === 4) setTimeout(() => checkPin(next), 150);
+  }
+
+  function handleMasterDigit(d) {
+    if (masterEntry.length >= 4) return;
+    const next = masterEntry + d;
+    setMasterEntry(next);
+    if (next.length === 4) setTimeout(() => checkMaster(next), 150);
   }
 
   function checkPin(p) {
-    if (!selectedUser.pin) {
-      // No PIN set — let them in anyway (backwards compat)
-      onSelect(selectedUser);
-      return;
-    }
-    if (p === selectedUser.pin) {
+    if (!selectedUser.pin || p === selectedUser.pin) {
       onSelect(selectedUser);
     } else {
-      setShake(true);
-      setError("PIN incorrecto");
-      setPin("");
+      setShake(true); setError("PIN incorrecto"); setPin("");
       setTimeout(() => setShake(false), 600);
     }
   }
 
-  function handleDelete() {
-    setPin(p => p.slice(0, -1));
-    setError("");
+  function checkMaster(p) {
+    if (p === masterPin) {
+      onAdminAccess();
+    } else {
+      setShake(true); setError("PIN incorrecto"); setMasterEntry("");
+      setTimeout(() => setShake(false), 600);
+    }
   }
 
+  function handleDelete() { setPin(p => p.slice(0,-1)); setError(""); }
+  function handleMasterDelete() { setMasterEntry(p => p.slice(0,-1)); setError(""); }
+
   const roleInfo = selectedUser ? ROLES[selectedUser.role] || ROLES.cocinero : null;
+
+  const Numpad = ({ onDigit, onDel, value, err }) => (
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:20, width:"100%" }}>
+      <div style={{ animation:shake?"shake .5s":"none" }}>
+        <div style={{ display:"flex", gap:14, justifyContent:"center", marginBottom:8 }}>
+          {[0,1,2,3].map(i=>(
+            <div key={i} style={{ width:18, height:18, borderRadius:"50%", background:value.length>i?"#fff":"rgba(255,255,255,.2)", transition:"background .1s", border:"2px solid rgba(255,255,255,.3)" }}/>
+          ))}
+        </div>
+        {err && <div style={{ textAlign:"center", color:"#FF8A80", fontSize:13, fontWeight:600 }}>{err}</div>}
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, width:"100%", maxWidth:280 }}>
+        {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=>(
+          <button key={i} onClick={()=>d==="⌫"?onDel():d!==""&&onDigit(String(d))}
+            disabled={d===""}
+            style={{ height:72, borderRadius:16, border:"1.5px solid rgba(255,255,255,.15)", background:d==="⌫"?"rgba(255,255,255,.05)":"rgba(255,255,255,.1)", color:"#fff", fontSize:d==="⌫"?24:28, fontWeight:600, cursor:d===""?"default":"pointer", opacity:d===""?0:1, WebkitTapHighlightColor:"transparent" }}>
+            {d}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <div style={{ minHeight:"100vh", background:C.dark, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:28 }}>
@@ -295,81 +323,81 @@ function UserSelectScreen({ users, onSelect, onCreateFirst }) {
 
       <div style={{ width:"100%", maxWidth:360 }}>
 
-        {/* ── Step 1: Select user ── */}
-        {!selectedUser && (
+        {/* ── Master admin PIN ── */}
+        {showMaster && (
+          <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:20 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:12, width:"100%" }}>
+              <button onClick={()=>{setShowMaster(false);setMasterEntry("");setError("");}}
+                style={{ background:"rgba(255,255,255,.08)", border:"none", cursor:"pointer", color:"#fff", borderRadius:10, padding:"8px 12px", fontSize:13 }}>← Volver</button>
+              <div style={{ flex:1, textAlign:"center" }}>
+                <div style={{ fontWeight:700, fontSize:16, color:"#fff" }}>👑 Acceso Admin</div>
+                <div style={{ fontSize:12, color:C.text3 }}>Introduce el PIN maestro</div>
+              </div>
+              <div style={{ width:70 }}/>
+            </div>
+            <Numpad onDigit={handleMasterDigit} onDel={handleMasterDelete} value={masterEntry} err={error}/>
+          </div>
+        )}
+
+        {/* ── User list ── */}
+        {!showMaster && !selectedUser && (
           <>
             <div style={{ fontSize:12, fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase", color:C.text3, marginBottom:14, textAlign:"center" }}>¿Quién eres?</div>
-            {users.length === 0 ? (
-              <div style={{ textAlign:"center", background:"rgba(255,255,255,.05)", borderRadius:16, padding:28 }}>
-                <div style={{ fontSize:36, marginBottom:10 }}>👤</div>
-                <div style={{ color:"#fff", fontSize:15, fontWeight:600, marginBottom:6 }}>Sin usuarios configurados</div>
-                <div style={{ color:C.text3, fontSize:13, marginBottom:20 }}>Crea el primer usuario para empezar</div>
-                <button onClick={onCreateFirst} style={{ ...B("orange"), fontSize:15, padding:"14px 28px", width:"100%" }}>Crear primer usuario</button>
-              </div>
-            ) : (
-              <div style={{ display:"grid", gap:10 }}>
-                {users.map(u => {
-                  const ri = ROLES[u.role] || ROLES.cocinero;
-                  return (
-                    <button key={u.id} onClick={() => handleUserClick(u)}
-                      style={{ background:"rgba(255,255,255,.07)", border:"1.5px solid rgba(255,255,255,.12)", borderRadius:16, padding:"16px 18px", cursor:"pointer", textAlign:"left", display:"flex", alignItems:"center", gap:14, WebkitTapHighlightColor:"transparent" }}>
-                      <div style={{ width:46, height:46, borderRadius:"50%", background:ri.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0, fontWeight:800, color:"#fff" }}>
-                        {u.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontWeight:700, fontSize:16, color:"#fff" }}>{u.name}</div>
-                        <div style={{ fontSize:12, color:C.text3, marginTop:3 }}>{ri.icon} {ri.label}</div>
-                      </div>
-                      <div style={{ color:C.text3, fontSize:18 }}>›</div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            <div style={{ display:"grid", gap:10 }}>
+              {/* Master admin button always visible */}
+              <button onClick={()=>{setShowMaster(true);setMasterEntry("");setError("");}}
+                style={{ background:"rgba(124,58,237,.2)", border:"1.5px solid rgba(124,58,237,.4)", borderRadius:16, padding:"16px 18px", cursor:"pointer", textAlign:"left", display:"flex", alignItems:"center", gap:14, WebkitTapHighlightColor:"transparent" }}>
+                <div style={{ width:46, height:46, borderRadius:"50%", background:"#7C3AED", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>👑</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:700, fontSize:16, color:"#fff" }}>Admin</div>
+                  <div style={{ fontSize:12, color:C.text3, marginTop:3 }}>Acceso con PIN maestro</div>
+                </div>
+                <div style={{ color:C.text3, fontSize:18 }}>›</div>
+              </button>
+              {/* Regular users */}
+              {users.map(u => {
+                const ri = ROLES[u.role] || ROLES.cocinero;
+                return (
+                  <button key={u.id} onClick={() => handleUserClick(u)}
+                    style={{ background:"rgba(255,255,255,.07)", border:"1.5px solid rgba(255,255,255,.12)", borderRadius:16, padding:"16px 18px", cursor:"pointer", textAlign:"left", display:"flex", alignItems:"center", gap:14, WebkitTapHighlightColor:"transparent" }}>
+                    <div style={{ width:46, height:46, borderRadius:"50%", background:ri.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0, fontWeight:800, color:"#fff" }}>
+                      {u.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontWeight:700, fontSize:16, color:"#fff" }}>{u.name}</div>
+                      <div style={{ fontSize:12, color:C.text3, marginTop:3 }}>{ri.icon} {ri.label}</div>
+                    </div>
+                    <div style={{ color:C.text3, fontSize:18 }}>›</div>
+                  </button>
+                );
+              })}
+            </div>
           </>
         )}
 
-        {/* ── Step 2: Enter PIN ── */}
-        {selectedUser && (
+        {/* ── User PIN entry ── */}
+        {!showMaster && selectedUser && (
           <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:20 }}>
-            {/* Back + user info */}
             <div style={{ display:"flex", alignItems:"center", gap:12, width:"100%" }}>
-              <button onClick={()=>{setSelectedUser(null);setPin("");setError("");}} style={{ background:"rgba(255,255,255,.08)", border:"none", cursor:"pointer", color:"#fff", borderRadius:10, padding:"8px 12px", fontSize:13 }}>← Volver</button>
+              <button onClick={()=>{setSelectedUser(null);setPin("");setError("");}}
+                style={{ background:"rgba(255,255,255,.08)", border:"none", cursor:"pointer", color:"#fff", borderRadius:10, padding:"8px 12px", fontSize:13 }}>← Volver</button>
               <div style={{ flex:1, textAlign:"center" }}>
                 <div style={{ fontWeight:700, fontSize:16, color:"#fff" }}>{selectedUser.name}</div>
                 <div style={{ fontSize:12, color:C.text3 }}>{roleInfo?.icon} {roleInfo?.label}</div>
               </div>
-              <div style={{ width:60 }}/>
+              <div style={{ width:70 }}/>
             </div>
-
-            {/* PIN dots */}
-            <div style={{ animation:shake?"shake .5s":"none" }}>
-              <div style={{ display:"flex", gap:14, justifyContent:"center", marginBottom:8 }}>
-                {[0,1,2,3].map(i=>(
-                  <div key={i} style={{ width:18, height:18, borderRadius:"50%", background:pin.length>i?"#fff":"rgba(255,255,255,.2)", transition:"background .1s", border:"2px solid rgba(255,255,255,.3)" }}/>
-                ))}
-              </div>
-              {error && <div style={{ textAlign:"center", color:"#FF8A80", fontSize:13, fontWeight:600 }}>{error}</div>}
-              {!selectedUser.pin && <div style={{ textAlign:"center", color:C.text3, fontSize:12 }}>Sin PIN configurado — pulsa cualquier número</div>}
-            </div>
-
-            {/* Numpad */}
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, width:"100%", maxWidth:280 }}>
-              {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=>(
-                <button key={i} onClick={()=>d==="⌫"?handleDelete():d!==""&&handleDigit(String(d))}
-                  disabled={d===""}
-                  style={{ height:72, borderRadius:16, border:"1.5px solid rgba(255,255,255,.15)", background:d==="⌫"?"rgba(255,255,255,.05)":"rgba(255,255,255,.1)", color:"#fff", fontSize:d==="⌫"?24:28, fontWeight:600, cursor:d===""?"default":"pointer", opacity:d===""?0:1, WebkitTapHighlightColor:"transparent" }}>
-                  {d}
-                </button>
-              ))}
-            </div>
+            {!selectedUser.pin && (
+              <div style={{ textAlign:"center", color:C.text3, fontSize:13, padding:"10px 0" }}>Sin PIN configurado — pulsa cualquier número para entrar</div>
+            )}
+            <Numpad onDigit={handleDigit} onDel={handleDelete} value={pin} err={error}/>
           </div>
         )}
+
       </div>
     </div>
   );
 }
-
 
 function UserModal({ user, restaurants, onClose, onSave, onDelete }) {
   const isNew = !user;
@@ -1505,6 +1533,7 @@ export default function App() {
   const [catalog,      setCatalog]      = useState([]);
   const [users,        setUsers]        = useState([]);
   const [inventories,  setInventories]  = useState([]);
+  const [masterPin,    setMasterPin]    = useState(DEFAULT_MASTER_PIN);
 
   // Subscribe to all Firestore collections
   useEffect(() => {
@@ -1526,6 +1555,7 @@ export default function App() {
       onSnapshot(collection(db,"catalog"),                                s=>setCatalog(s.docs.map(d=>({id:d.id,...d.data()}))), ()=>{}),
       onSnapshot(query(collection(db,"users"),orderBy("name")),           s=>setUsers(s.docs.map(d=>({id:d.id,...d.data()}))), ()=>{}),
       onSnapshot(query(collection(db,"inventories"),orderBy("date","desc")),s=>setInventories(s.docs.map(d=>({id:d.id,...d.data()}))), ()=>{}),
+      onSnapshot(doc(db,"settings","app"), s=>{ if(s.exists()&&s.data().masterPin) setMasterPin(s.data().masterPin); }, ()=>{}),
     ];
     setTimeout(()=>setLoading(false), 1200);
     return () => unsubs.forEach(u=>u());
@@ -1565,6 +1595,7 @@ export default function App() {
 
   async function saveUser(u) { await fbSet("users", u.id, u); }
   async function deleteUser(id) { await fbDel("users", id); }
+  async function saveMasterPin(pin) { await fbSet("settings","app",{masterPin:pin}); }
 
   async function saveProduct(p) {
     const isNew = !products.find(x=>x.id===p.id);
@@ -1652,7 +1683,7 @@ export default function App() {
   if (showUserSel || !currentUser) return (
     <>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}*{box-sizing:border-box;-webkit-font-smoothing:antialiased}body{margin:0;font-family:'DM Sans',system-ui,sans-serif}`}</style>
-      <UserSelectScreen users={users} onSelect={selectUser} onCreateFirst={()=>{ setShowUserSel(false); setModal("user"); setSel(null); }}/>
+      <UserSelectScreen users={users} onSelect={selectUser} masterPin={masterPin} onAdminAccess={()=>{ selectUser({id:"__master__",name:"Admin",role:"admin",pin:masterPin}); }}/>
       {modal==="user"&&<UserModal user={null} restaurants={restaurants} onClose={()=>{setModal(null);if(!currentUser)setShowUserSel(true);}} onSave={async u=>{await saveUser(u);selectUser(u);}} onDelete={()=>{}}/>}
     </>
   );
@@ -2134,6 +2165,11 @@ export default function App() {
         {tab==="settings"&&(
           <div style={{ display:"grid", gap:14, maxWidth:600 }}>
 
+            {/* Master PIN — admin only */}
+            {can(currentUser,"settings")&&(
+              <MasterPinEditor masterPin={masterPin} onSave={saveMasterPin}/>
+            )}
+
             {/* Usuarios */}
             <div style={{ background:"#fff", borderRadius:14, border:"1px solid #e2e8f0", overflow:"hidden" }}>
               <div style={{ background:"#1e293b", padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
@@ -2389,6 +2425,67 @@ function CatalogModal({ item, categories, onClose, onSave }) {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Master PIN editor ────────────────────────────────────────────────────────
+function MasterPinEditor({ masterPin, onSave }) {
+  const [editing, setEditing]   = useState(false);
+  const [newPin, setNewPin]     = useState("");
+  const [confirm, setConfirm]   = useState(false);
+  const [saved, setSaved]       = useState(false);
+
+  function handleDigit(d) {
+    if (newPin.length < 4) setNewPin(p => p+d);
+  }
+  function handleDel() { setNewPin(p => p.slice(0,-1)); }
+
+  async function handleSave() {
+    if (newPin.length !== 4) return;
+    await onSave(newPin);
+    setSaved(true);
+    setTimeout(() => { setSaved(false); setEditing(false); setNewPin(""); setConfirm(false); }, 1500);
+  }
+
+  return (
+    <div style={{ background:C.surface, borderRadius:14, border:`1px solid ${C.border}`, padding:18 }}>
+      <div style={{ fontWeight:700, fontSize:14, color:C.text, marginBottom:4 }}>👑 PIN maestro de Admin</div>
+      <div style={{ fontSize:12, color:C.text2, marginBottom:14 }}>
+        PIN actual: <strong>{masterPin}</strong> · Úsalo en la pantalla de inicio para entrar como Admin
+      </div>
+      {!editing ? (
+        <button onClick={()=>{setEditing(true);setNewPin("");}} style={{ ...B("ghost"), width:"100%", fontSize:14 }}>
+          ✏️ Cambiar PIN maestro
+        </button>
+      ) : saved ? (
+        <div style={{ background:C.greenBg, borderRadius:10, padding:"12px", textAlign:"center", fontWeight:700, color:C.green }}>✓ PIN actualizado</div>
+      ) : (
+        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+          <div style={{ textAlign:"center" }}>
+            <div style={{ fontSize:13, color:C.text2, marginBottom:10 }}>Nuevo PIN (4 dígitos)</div>
+            <div style={{ display:"flex", gap:12, justifyContent:"center", marginBottom:14 }}>
+              {[0,1,2,3].map(i=>(
+                <div key={i} style={{ width:16, height:16, borderRadius:"50%", background:newPin.length>i?C.accent:C.border, transition:"background .1s" }}/>
+              ))}
+            </div>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
+            {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=>(
+              <button key={i} type="button"
+                onClick={()=>d==="⌫"?handleDel():d!==""&&handleDigit(String(d))}
+                disabled={d===""}
+                style={{ height:52, borderRadius:10, border:`1.5px solid ${C.border}`, background:C.surface2, color:C.text, fontSize:d==="⌫"?18:20, fontWeight:600, cursor:d===""?"default":"pointer", opacity:d===""?0:1 }}>
+                {d}
+              </button>
+            ))}
+          </div>
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={()=>{setEditing(false);setNewPin("");}} style={{ ...B("ghost"), flex:1 }}>Cancelar</button>
+            <button onClick={handleSave} disabled={newPin.length!==4} style={{ ...B("primary"), flex:1 }}>Guardar PIN</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
