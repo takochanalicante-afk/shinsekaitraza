@@ -34,203 +34,18 @@ const DEFAULT_CATS = [
   { id:"otros",       label:"Otros",                   icon:"📦" },
 ];
 
-// ── Translations ──────────────────────────────────────────────────────────────
-const LANGS = { es:"🇪🇸 Español", zh:"🇨🇳 中文", ja:"🇯🇵 日本語" };
-
-const T = {
-  es: {
-    // Nav
-    dashboard:"Dashboard", restaurants:"Locales", products:"Productos",
-    transfers:"Transferencias", history:"Historial", settings:"Ajustes",
-    // Topbar
-    scan:"Scan",
-    // Dashboard
-    activeProducts:"Productos activos", transfersLabel:"Transferencias",
-    expired:"Caducados", locals:"Locales",
-    quickActions:"Acciones rápidas", newProduct:"Nuevo producto",
-    transfer:"Transferir", scanQR:"Escanear QR", historyLabel:"Historial",
-    recentTransfers:"Últimas transferencias",
-    // Alerts
-    expiredAlert:"producto caducado", expiredAlerts:"productos caducados",
-    nearAlert:"producto caduca pronto", nearAlerts:"productos caducan pronto",
-    // Products tab
-    searchProduct:"Buscar producto o lote...", allLocals:"Todos",
-    allStates:"Todos los estados", ok:"OK", nearExpiry:"Caduca pronto",
-    noProducts:"Sin productos", noProductsHint:"Pulsa + Producto para empezar",
-    label:"Etiqueta", edit:"Editar", delete:"Borrar",
-    // Transfers tab
-    noTransfers:"Sin transferencias", noTransfersHint:"Usa el botón de arriba para registrar una",
-    // History tab
-    exportExcel:"Exportar Excel completo",
-    noHistory:"Sin eventos registrados",
-    creation:"Elaboración", edition:"Edición", transferEvent:"Transferencia", scanEvent:"Escaneo",
-    // Settings
-    users:"Usuarios", usersDesc:"Firman elaboraciones y transferencias",
-    newUser:"+ Nuevo",
-    categories:"Categorías",
-    catalogLabel:"Catálogo de productos",
-    exportData:"Exportar datos", exportDesc:"Excel completo: Locales, Productos, Transferencias e Historial.",
-    downloadExcel:"Descargar Excel",
-    language:"Idioma de la interfaz",
-    // User select
-    whosCooking:"¿Quién está cocinando hoy?", noUsers:"Sin usuarios configurados",
-    noUsersHint:"Crea el primer usuario para empezar", createFirstUser:"Crear primer usuario",
-    // Modals
-    newTransfer:"Nueva transferencia", registerTransfer:"Registrar transferencia →",
-    origin:"Origen", stock:"Stock", selectProduct:"Seleccionar producto...",
-    selectDest:"Seleccionar destino...", selectDestFirst:"Selecciona un producto primero",
-    qty:"Cantidad a transferir", note:"Nota (opcional)", observations:"Observaciones...",
-    signedBy:"Firmado por",
-    remaining:"Quedan en origen", arriving:"Llegan a destino", exceedsStock:"⚠️ Supera el stock",
-    confirmTransfer:"Confirmar transferencia", back:"← Volver",
-    // Product modal
-    newProductTitle:"Nuevo producto — Plantilla", newProductForm:"Nuevo producto — Detalles",
-    editProduct:"Editar producto",
-    createFromScratch:"Crear desde cero", createFromScratchHint:"Sin usar plantilla del catálogo",
-    emptyCatalog:"Catálogo vacío", emptyCatalogHint:"Añade plantillas en Ajustes → Catálogo",
-    searchCatalog:"🔍 Buscar en el catálogo...",
-    category:"Categoría", name:"Nombre *", local:"Local *", lot:"Lote",
-    elaboration:"Elaboración", expiry:"Caducidad", quantity:"Cantidad", unit:"Unidad",
-    notesAllergens:"Notas / Alérgenos", allergenPlaceholder:"Alérgenos, ingredientes...",
-    saveChanges:"Guardar cambios", registerElab:"Registrar elaboración",
-    // Status
-    noDate:"Sin fecha", caducado:"Caducado", cadPronto:"Caduca pronto",
-    // Misc
-    cancel:"Cancelar", confirm:"Confirmar", yes:"Sí", no:"No",
-    multiLoad:"Carga múltiple", simple:"Simple", queue:"Cola",
-    queueEmpty:"Cola vacía — escanea el primer producto",
-    transferN:"Transferir", products_pl:"productos",
-    newLoad:"Nueva carga", close:"Cerrar", completed:"Completado",
-    openCamera:"Abrir cámara", selectGallery:"Seleccionar de la galería",
-    readingQR:"Leyendo QR...",
-  },
-  zh: {
-    dashboard:"仪表板", restaurants:"门店", products:"产品",
-    transfers:"调拨", history:"历史记录", settings:"设置",
-    scan:"扫描",
-    activeProducts:"在库产品", transfersLabel:"调拨记录",
-    expired:"已过期", locals:"门店",
-    quickActions:"快捷操作", newProduct:"新建产品",
-    transfer:"调拨", scanQR:"扫描二维码", historyLabel:"历史记录",
-    recentTransfers:"最近调拨",
-    expiredAlert:"个产品已过期", expiredAlerts:"个产品已过期",
-    nearAlert:"个产品即将过期", nearAlerts:"个产品即将过期",
-    searchProduct:"搜索产品或批次...", allLocals:"全部",
-    allStates:"全部状态", ok:"正常", nearExpiry:"即将过期",
-    noProducts:"暂无产品", noProductsHint:"点击 + 产品 开始添加",
-    label:"标签", edit:"编辑", delete:"删除",
-    noTransfers:"暂无调拨记录", noTransfersHint:"点击上方按钮添加",
-    exportExcel:"导出完整Excel",
-    noHistory:"暂无记录",
-    creation:"生产", edition:"编辑", transferEvent:"调拨", scanEvent:"扫描",
-    users:"用户", usersDesc:"在生产和调拨时签名",
-    newUser:"+ 新建",
-    categories:"分类",
-    catalogLabel:"产品目录",
-    exportData:"导出数据", exportDesc:"完整Excel：门店、产品、调拨记录和历史。",
-    downloadExcel:"下载Excel",
-    language:"界面语言",
-    whosCooking:"今天谁在工作？", noUsers:"尚未设置用户",
-    noUsersHint:"请先创建用户", createFirstUser:"创建第一个用户",
-    newTransfer:"新建调拨", registerTransfer:"登记调拨 →",
-    origin:"来源", stock:"库存", selectProduct:"选择产品...",
-    selectDest:"选择目标门店...", selectDestFirst:"请先选择产品",
-    qty:"调拨数量", note:"备注（可选）", observations:"备注...",
-    signedBy:"操作人",
-    remaining:"来源剩余", arriving:"到达数量", exceedsStock:"⚠️ 超出库存",
-    confirmTransfer:"确认调拨", back:"← 返回",
-    newProductTitle:"新建产品 — 模板", newProductForm:"新建产品 — 详情",
-    editProduct:"编辑产品",
-    createFromScratch:"从头创建", createFromScratchHint:"不使用模板",
-    emptyCatalog:"目录为空", emptyCatalogHint:"请在设置→目录中添加模板",
-    searchCatalog:"🔍 在目录中搜索...",
-    category:"分类", name:"名称 *", local:"门店 *", lot:"批次",
-    elaboration:"生产日期", expiry:"到期日期", quantity:"数量", unit:"单位",
-    notesAllergens:"备注 / 过敏原", allergenPlaceholder:"过敏原、成分...",
-    saveChanges:"保存修改", registerElab:"登记生产",
-    noDate:"无日期", caducado:"已过期", cadPronto:"即将过期",
-    cancel:"取消", confirm:"确认", yes:"是", no:"否",
-    multiLoad:"批量模式", simple:"单次", queue:"队列",
-    queueEmpty:"队列为空 — 扫描第一个产品",
-    transferN:"调拨", products_pl:"个产品",
-    newLoad:"新建调拨", close:"关闭", completed:"完成",
-    openCamera:"打开相机", selectGallery:"从相册选择",
-    readingQR:"正在读取...",
-  },
-  ja: {
-    dashboard:"ダッシュボード", restaurants:"店舗", products:"商品",
-    transfers:"移動", history:"履歴", settings:"設定",
-    scan:"スキャン",
-    activeProducts:"在庫商品", transfersLabel:"移動記録",
-    expired:"期限切れ", locals:"店舗",
-    quickActions:"クイック操作", newProduct:"新規商品",
-    transfer:"移動", scanQR:"QRスキャン", historyLabel:"履歴",
-    recentTransfers:"最近の移動",
-    expiredAlert:"商品が期限切れ", expiredAlerts:"商品が期限切れ",
-    nearAlert:"商品がもうすぐ期限切れ", nearAlerts:"商品がもうすぐ期限切れ",
-    searchProduct:"商品またはロットを検索...", allLocals:"すべて",
-    allStates:"すべての状態", ok:"正常", nearExpiry:"期限間近",
-    noProducts:"商品なし", noProductsHint:"+ 商品 をタップして追加",
-    label:"ラベル", edit:"編集", delete:"削除",
-    noTransfers:"移動記録なし", noTransfersHint:"上のボタンで追加",
-    exportExcel:"Excel全体をエクスポート",
-    noHistory:"記録なし",
-    creation:"製造", edition:"編集", transferEvent:"移動", scanEvent:"スキャン",
-    users:"ユーザー", usersDesc:"製造・移動時に署名",
-    newUser:"+ 新規",
-    categories:"カテゴリー",
-    catalogLabel:"商品カタログ",
-    exportData:"データエクスポート", exportDesc:"完全Excel：店舗、商品、移動記録、履歴。",
-    downloadExcel:"Excelダウンロード",
-    language:"インターフェース言語",
-    whosCooking:"今日の担当者は？", noUsers:"ユーザー未設定",
-    noUsersHint:"まずユーザーを作成してください", createFirstUser:"最初のユーザーを作成",
-    newTransfer:"新規移動", registerTransfer:"移動を登録 →",
-    origin:"出発地", stock:"在庫", selectProduct:"商品を選択...",
-    selectDest:"移動先を選択...", selectDestFirst:"先に商品を選択",
-    qty:"移動数量", note:"メモ（任意）", observations:"メモ...",
-    signedBy:"担当者",
-    remaining:"出発地残量", arriving:"到着数量", exceedsStock:"⚠️ 在庫超過",
-    confirmTransfer:"移動を確認", back:"← 戻る",
-    newProductTitle:"新規商品 — テンプレート", newProductForm:"新規商品 — 詳細",
-    editProduct:"商品を編集",
-    createFromScratch:"ゼロから作成", createFromScratchHint:"テンプレートを使わない",
-    emptyCatalog:"カタログが空", emptyCatalogHint:"設定→カタログでテンプレートを追加",
-    searchCatalog:"🔍 カタログを検索...",
-    category:"カテゴリー", name:"名前 *", local:"店舗 *", lot:"ロット",
-    elaboration:"製造日", expiry:"賞味期限", quantity:"数量", unit:"単位",
-    notesAllergens:"メモ / アレルゲン", allergenPlaceholder:"アレルゲン、原材料...",
-    saveChanges:"変更を保存", registerElab:"製造を登録",
-    noDate:"日付なし", caducado:"期限切れ", cadPronto:"期限間近",
-    cancel:"キャンセル", confirm:"確認", yes:"はい", no:"いいえ",
-    multiLoad:"まとめモード", simple:"単体", queue:"キュー",
-    queueEmpty:"キューが空 — 最初の商品をスキャン",
-    transferN:"移動", products_pl:"商品",
-    newLoad:"新規移動", close:"閉じる", completed:"完了",
-    openCamera:"カメラを開く", selectGallery:"ギャラリーから選択",
-    readingQR:"読み取り中...",
-  },
-};
-
-function useLang() {
-  const [lang, setLang] = useState(() => localStorage.getItem("trazapro_lang") || "es");
-  const changeLang = (l) => { setLang(l); localStorage.setItem("trazapro_lang", l); };
-  const t = (key) => T[lang]?.[key] || T.es[key] || key;
-  return { lang, changeLang, t, LANGS };
-}
-
 
 // ── Default units ────────────────────────────────────────────────────────────
 const DEFAULT_UNITS = ["kg","g","l","ml","ud","raciones","bandejas","porciones","cajas","bolsas","latas","botellas","sobres"];
 
 // ── Nav ───────────────────────────────────────────────────────────────────────
 const NAVS = [
-  { id:"dashboard",   icon:"⊞", tk:"dashboard" },
-  { id:"restaurants", icon:"🏠", tk:"restaurants" },
-  { id:"products",    icon:"⬡", tk:"products" },
-  { id:"transfers",   icon:"⇄", tk:"transfers" },
-  { id:"history",     icon:"📋", tk:"history" },
-  { id:"settings",    icon:"⚙️",  tk:"settings" },
+  { id:"dashboard",   icon:"⊞", l:"Dashboard" },
+  { id:"restaurants", icon:"🏠", l:"Locales" },
+  { id:"products",    icon:"⬡", l:"Productos" },
+  { id:"transfers",   icon:"⇄", l:"Transferencias" },
+  { id:"history",     icon:"📋", l:"Historial" },
+  { id:"settings",    icon:"⚙️",  l:"Ajustes" },
 ];
 
 // ── Design tokens — Warm & Clean (iPhone-first) ──────────────────────────────
@@ -383,7 +198,7 @@ async function generateQR(data) {
 }
 
 // ── USER SELECT SCREEN ────────────────────────────────────────────────────────
-function UserSelectScreen({ users, onSelect, onCreateFirst, t=(k)=>k }) {
+function UserSelectScreen({ users, onSelect, onCreateFirst }) {
   return (
     <div style={{ minHeight:"100vh", background:C.dark, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:28 }}>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
@@ -402,7 +217,7 @@ function UserSelectScreen({ users, onSelect, onCreateFirst, t=(k)=>k }) {
             <div style={{ fontSize:36, marginBottom:10 }}>👤</div>
             <div style={{ color:"#fff", fontSize:15, fontWeight:600, marginBottom:6 }}>Sin usuarios configurados</div>
             <div style={{ color:C.text3, fontSize:13, marginBottom:20 }}>Crea el primer usuario para empezar</div>
-            <button onClick={onCreateFirst} style={{ ...B("orange"), fontSize:15, padding:"14px 28px", width:"100%" }}>{t("createFirstUser")}</button>
+            <button onClick={onCreateFirst} style={{ ...B("orange"), fontSize:15, padding:"14px 28px", width:"100%" }}>Crear primer usuario</button>
           </div>
         ) : (
           <div style={{ display:"grid", gap:10 }}>
@@ -1151,7 +966,7 @@ function TransferModal({ products, restaurants, currentUser, onClose, onSave }) 
 }
 
 // ── SIDEBAR ─────────────────────────────────────────────────────────────────
-function Sidebar({ open, onClose, tab, setTab, restsCount, allCount, currentUser, onChangeUser, onNewProduct, onExport, onScan, t=(k)=>k }) {
+function Sidebar({ open, onClose, tab, setTab, restsCount, allCount, currentUser, onChangeUser, onNewProduct, onExport, onScan }) {
   return (
     <>
       <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:200, background:"rgba(20,15,8,0.55)", backdropFilter:"blur(3px)", opacity:open?1:0, pointerEvents:open?"auto":"none", transition:"opacity .2s" }}/>
@@ -1192,7 +1007,7 @@ function Sidebar({ open, onClose, tab, setTab, restsCount, allCount, currentUser
               <button key={n.id} onClick={() => { setTab(n.id); onClose(); }}
                 style={{ width:"100%", display:"flex", alignItems:"center", gap:14, padding:"13px 14px", borderRadius:12, border:"none", cursor:"pointer", marginBottom:4, textAlign:"left", background:active?"rgba(212,98,42,.18)":"transparent", color:active?C.accentL:"rgba(255,255,255,.55)", fontWeight:active?700:400, fontSize:15, WebkitTapHighlightColor:"transparent", transition:"background .15s" }}>
                 <span style={{ fontSize:20, width:24, textAlign:"center", opacity:active?1:0.7 }}>{n.icon}</span>
-                <span style={{ flex:1 }}>{t(n.tk)}</span>
+                <span style={{ flex:1 }}>{n.l}</span>
                 {badge != null && badge > 0 && (
                   <span style={{ background:active?C.accent:"rgba(255,255,255,.15)", color:active?"#fff":"rgba(255,255,255,.7)", borderRadius:20, padding:"2px 8px", fontSize:12, fontWeight:700 }}>{badge}</span>
                 )}
@@ -1211,11 +1026,11 @@ function Sidebar({ open, onClose, tab, setTab, restsCount, allCount, currentUser
           </button>
           <button onClick={() => { onScan(); onClose(); }}
             style={{ width:"100%", textAlign:"left", display:"flex", alignItems:"center", gap:10, fontSize:14, background:"rgba(255,255,255,.07)", color:"rgba(255,255,255,.8)", border:"1px solid rgba(255,255,255,.12)", borderRadius:12, padding:"13px 16px", cursor:"pointer", fontWeight:600, WebkitTapHighlightColor:"transparent" }}>
-            <span style={{ fontSize:18 }}>📷</span> {t("scanQR")}
+            <span style={{ fontSize:18 }}>📷</span> Escanear QR
           </button>
           <button onClick={onExport}
             style={{ width:"100%", textAlign:"left", display:"flex", alignItems:"center", gap:10, fontSize:14, background:"rgba(255,255,255,.07)", color:"rgba(255,255,255,.8)", border:"1px solid rgba(255,255,255,.12)", borderRadius:12, padding:"13px 16px", cursor:"pointer", fontWeight:600, WebkitTapHighlightColor:"transparent" }}>
-            <span style={{ fontSize:18 }}>📊</span> {t("exportData")}
+            <span style={{ fontSize:18 }}>📊</span> Exportar Excel
           </button>
         </div>
       </div>
@@ -1225,7 +1040,6 @@ function Sidebar({ open, onClose, tab, setTab, restsCount, allCount, currentUser
 
 // ── MAIN APP ──────────────────────────────────────────────────────────────────
 export default function App() {
-  const { lang, changeLang, t, LANGS } = useLang();
   const [loading,      setLoading]      = useState(true);
   const [currentUser,  setCurrentUser]  = useState(null);
   const [showUserSel,  setShowUserSel]  = useState(false);
@@ -1369,7 +1183,7 @@ export default function App() {
   if (showUserSel || !currentUser) return (
     <>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}*{box-sizing:border-box;-webkit-font-smoothing:antialiased}body{margin:0;font-family:'DM Sans',system-ui,sans-serif}`}</style>
-      <UserSelectScreen users={users} onSelect={selectUser} onCreateFirst={()=>{ setShowUserSel(false); setModal("user"); setSel(null); }} t={t}/>
+      <UserSelectScreen users={users} onSelect={selectUser} onCreateFirst={()=>{ setShowUserSel(false); setModal("user"); setSel(null); }}/>
       {modal==="user"&&<UserModal user={null} restaurants={restaurants} onClose={()=>{setModal(null);if(!currentUser)setShowUserSel(true);}} onSave={async u=>{await saveUser(u);selectUser(u);}} onDelete={()=>{}}/>}
     </>
   );
@@ -1384,7 +1198,6 @@ export default function App() {
         onNewProduct={()=>{setSel(null);setModal("product");}}
         onExport={()=>exportXLS({restaurants,products,transfers,history,categories:cats,users})}
         onScan={()=>setModal("scanner")}
-        t={t}
       />
 
       {/* Topbar */}
@@ -1415,14 +1228,14 @@ export default function App() {
       <div style={{ background:C.surface, borderBottom:`1px solid ${C.border}`, padding:"12px 18px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <span style={{ fontSize:20 }}>{curNav?.icon}</span>
-          <span style={{ fontWeight:700, fontSize:17, color:C.text }}>{curNav?t(curNav.tk):""}</span>
+          <span style={{ fontWeight:700, fontSize:17, color:C.text }}>{curNav?.l}</span>
           {tab==="products"&&products.length>0&&<span style={bdg("neutral")}>{products.length}</span>}
           {tab==="restaurants"&&<span style={bdg("blue")}>{restaurants.length}</span>}
         </div>
         {/* Context action button */}
-        {tab==="products"&&<button onClick={()=>{setSel(null);setModal("product");}} style={{ ...B("orange"), padding:"10px 18px", fontSize:14 }}>{t("newProduct")}</button>}
-        {tab==="restaurants"&&<button onClick={()=>{setSel(null);setModal("restaurant");}} style={{ ...B("orange"), padding:"10px 18px", fontSize:14 }}>{t("restaurants")}</button>}
-        {tab==="transfers"&&<button onClick={()=>setModal("transfer")} style={{ ...B("orange"), padding:"10px 18px", fontSize:14 }}>{t("transfer")}</button>}
+        {tab==="products"&&<button onClick={()=>{setSel(null);setModal("product");}} style={{ ...B("orange"), padding:"10px 18px", fontSize:14 }}>Nuevo producto</button>}
+        {tab==="restaurants"&&<button onClick={()=>{setSel(null);setModal("restaurant");}} style={{ ...B("orange"), padding:"10px 18px", fontSize:14 }}>+ Local</button>}
+        {tab==="transfers"&&<button onClick={()=>setModal("transfer")} style={{ ...B("orange"), padding:"10px 18px", fontSize:14 }}>Transferir</button>}
       </div>
 
       <div style={{ maxWidth:640, margin:"0 auto", padding:"16px 14px 32px" }}>
@@ -1493,7 +1306,7 @@ export default function App() {
             {transfers.length>0&&(
               <div style={{ background:C.surface, borderRadius:16, border:`1px solid ${C.border}`, overflow:"hidden" }}>
                 <div style={{ padding:"14px 18px", borderBottom:`1px solid ${C.border}` }}>
-                  <div style={{ fontWeight:700, fontSize:14, color:C.text }}>{t("recentTransfers")}</div>
+                  <div style={{ fontWeight:700, fontSize:14, color:C.text }}>Últimas transferencias</div>
                 </div>
                 <div style={{ padding:"0 18px" }}>
                   {transfers.slice(0,5).map(t=>{
@@ -1589,7 +1402,7 @@ export default function App() {
               ))}
             </div>
             <div style={{ display:"flex", gap:8, overflowX:"auto", paddingBottom:2 }}>
-              {[{v:"all",l:t("allStates")},{v:"ok",l:t("ok")},{v:"near",l:t("nearExpiry")},{v:"expired",l:t("expired")}].map(s=>(
+              {[{v:"all",l:"Todos los estados"},{v:"ok",l:"OK"},{v:"near",l:"Caduca pronto"},{v:"expired",l:"Caducados"}].map(s=>(
                 <button key={s.v} onClick={()=>setFSt(s.v)}
                   style={{ flexShrink:0, padding:"8px 14px", borderRadius:20, border:`1.5px solid ${fSt===s.v?C.accent:C.border}`, background:fSt===s.v?C.accentBg:C.surface, color:fSt===s.v?C.accent:C.text2, fontSize:13, fontWeight:fSt===s.v?700:400, cursor:"pointer", whiteSpace:"nowrap" }}>
                   {s.l}
@@ -1659,7 +1472,7 @@ export default function App() {
               ?<div style={{ textAlign:"center", padding:"60px 0", color:C.text3 }}>
                 <div style={{ fontSize:48, marginBottom:10 }}>⇄</div>
                 <div style={{ fontWeight:600, fontSize:16, color:C.text2 }}>Sin transferencias</div>
-                <div style={{ fontSize:13, marginTop:4 }}>{t("noTransfersHint")}</div>
+                <div style={{ fontSize:13, marginTop:4 }}>Usa el botón de arriba para registrar una</div>
               </div>
               :<div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                 {transfers.map(t=>{
@@ -1690,7 +1503,7 @@ export default function App() {
         {/* ── HISTORIAL ── */}
         {tab==="history"&&(
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-            <button onClick={()=>exportXLS({restaurants,products,transfers,history,categories:cats,users})} style={{ ...B("green"), width:"100%", fontSize:14 }}>{t("exportExcel")}</button>
+            <button onClick={()=>exportXLS({restaurants,products,transfers,history,categories:cats,users})} style={{ ...B("green"), width:"100%", fontSize:14 }}>Exportar Excel completo</button>
             {history.length===0
               ?<div style={{ textAlign:"center", padding:"60px 0", color:C.text3 }}>
                 <div style={{ fontSize:48, marginBottom:10 }}>📋</div>
@@ -1746,7 +1559,7 @@ export default function App() {
             {/* Usuarios */}
             <div style={{ background:"#fff", borderRadius:14, border:"1px solid #e2e8f0", overflow:"hidden" }}>
               <div style={{ background:"#1e293b", padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                <div><div style={{ fontWeight:800, fontSize:14, color:"#fff" }}>{t("users")}</div><div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{users.length} usuarios · Firman elaboraciones y transferencias</div></div>
+                <div><div style={{ fontWeight:800, fontSize:14, color:"#fff" }}>Usuarios</div><div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{users.length} usuarios · Firman elaboraciones y transferencias</div></div>
                 <button onClick={()=>{setSel(null);setModal("user");}} style={{ ...B("orange"), fontSize:12, padding:"5px 12px" }}>+ Nuevo</button>
               </div>
               <div style={{ padding:14, display:"grid", gap:7 }}>
@@ -1770,7 +1583,7 @@ export default function App() {
             {/* Categorías */}
             <div style={{ background:"#fff", borderRadius:14, border:"1px solid #e2e8f0", overflow:"hidden" }}>
               <div style={{ background:"#1e293b", padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                <div><div style={{ fontWeight:800, fontSize:14, color:"#fff" }}>{t("categories")}</div><div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{cats.length} categorías</div></div>
+                <div><div style={{ fontWeight:800, fontSize:14, color:"#fff" }}>Categorías</div><div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{cats.length} categorías</div></div>
                 <button onClick={()=>{setSel(null);setModal("category");}} style={{ ...B("orange"), fontSize:12, padding:"5px 12px" }}>+ Nueva</button>
               </div>
               <div style={{ padding:14, display:"grid", gap:6 }}>
@@ -1788,7 +1601,7 @@ export default function App() {
             {/* Catalogo de plantillas */}
             <div style={{ background:"#fff", borderRadius:14, border:"1px solid #e2e8f0", overflow:"hidden" }}>
               <div style={{ background:"#1e293b", padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                <div><div style={{ fontWeight:800, fontSize:14, color:"#fff" }}>{t("catalogLabel")}</div><div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{catalog.length} plantillas</div></div>
+                <div><div style={{ fontWeight:800, fontSize:14, color:"#fff" }}>Catálogo de productos</div><div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{catalog.length} plantillas</div></div>
                 <button onClick={()=>{setSel(null);setModal("catalog");}} style={{ ...B("orange"), fontSize:12, padding:"5px 12px" }}>+ Nueva</button>
               </div>
               <div style={{ padding:14, display:"grid", gap:7 }}>
@@ -1813,25 +1626,11 @@ export default function App() {
               </div>
             </div>
 
-            {/* Language selector */}
-            <div style={{ background:C.surface, borderRadius:14, border:`1px solid ${C.border}`, padding:18 }}>
-              <div style={{ fontWeight:700, fontSize:14, color:C.text, marginBottom:4 }}>🌐 {t("language")}</div>
-              <div style={{ fontSize:12, color:C.text2, marginBottom:14 }}>Las etiquetas se imprimen siempre en español para cumplimiento normativo.</div>
-              <div style={{ display:"flex", gap:8 }}>
-                {Object.entries(LANGS).map(([code, label]) => (
-                  <button key={code} onClick={() => changeLang(code)}
-                    style={{ flex:1, padding:"12px 6px", borderRadius:12, border:`2px solid ${lang===code?C.accent:C.border}`, background:lang===code?C.accentBg:C.surface2, color:lang===code?C.accent:C.text2, fontWeight:lang===code?800:400, fontSize:13, cursor:"pointer" }}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* Export */}
             <div style={{ background:C.surface, borderRadius:12, border:`1px solid ${C.border}`, padding:16 }}>
-              <div style={{ fontWeight:700, fontSize:14, marginBottom:6 }}>📊 {t("exportData")}</div>
-              <p style={{ fontSize:13, color:C.text2, marginBottom:10 }}>{t("exportDesc")}</p>
-              <button onClick={()=>exportXLS({restaurants,products,transfers,history,categories:cats,users})} style={{ ...B("green"), width:"100%" }}>{t("downloadExcel")}</button>
+              <div style={{ fontWeight:700, fontSize:14, marginBottom:6 }}>📊 Exportar datos</div>
+              <p style={{ fontSize:13, color:C.text2, marginBottom:10 }}>Excel completo: Locales, Productos, Transferencias (con firmas) e Historial.</p>
+              <button onClick={()=>exportXLS({restaurants,products,transfers,history,categories:cats,users})} style={{ ...B("green"), width:"100%" }}>Descargar Excel</button>
             </div>
           </div>
         )}
@@ -2051,7 +1850,7 @@ function CategoryForm({ cat, cats, onSave, onDelete, onClose }) {
         )}
         {onDelete && confirmDel && (
           <div style={{ display:"flex", gap:6, flex:1 }}>
-            <button onClick={()=>{ if(cats.length<=1){alert("Debe quedar al menos una categoría.");return;} onDelete(cat.id); onClose(); }} style={{ ...B("red"), flex:1 }}>Sí, eliminar</button>
+            <button onClick={async ()=>{ if(cats.length<=1){alert("Debe quedar al menos una categoría.");return;} await onDelete(cat.id); onClose(); }} style={{ ...B("red"), flex:1 }}>Sí, eliminar</button>
             <button onClick={()=>setConfirmDel(false)} style={{ ...B("ghost"), flex:1 }}>No</button>
           </div>
         )}
