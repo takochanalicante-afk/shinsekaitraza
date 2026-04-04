@@ -35,6 +35,29 @@ const DEFAULT_CATS = [
 ];
 
 
+// ── Roles & Permissions ──────────────────────────────────────────────────────
+const ROLES = {
+  admin:    { label:"Admin",    icon:"👑", color:"#7C3AED" },
+  manager:  { label:"Manager",  icon:"🔑", color:"#D97706" },
+  empleado: { label:"Empleado", icon:"👤", color:"#0891B2" },
+  cocinero: { label:"Cocinero", icon:"👨‍🍳", color:"#16A34A" },
+};
+
+// What each role CAN do
+const CAN = {
+  admin:    ["dashboard","restaurants","products","products.create","products.edit","products.delete","transfers","inventory","history","settings","scan"],
+  manager:  ["dashboard","restaurants","products","products.create","products.edit","transfers","inventory","history","scan"],
+  empleado: ["dashboard","products","products.create","transfers","inventory","scan"],
+  cocinero: ["dashboard","products","products.create","inventory","scan"],
+};
+
+function can(user, action) {
+  if (!user) return false;
+  const role = user.role || "cocinero";
+  const perms = CAN[role] || CAN["cocinero"];
+  return perms.includes(action);
+}
+
 // ── Default units ────────────────────────────────────────────────────────────
 const DEFAULT_UNITS = ["kg","g","l","ml","ud","raciones","bandejas","porciones","cajas","bolsas","latas","botellas","sobres"];
 
@@ -214,10 +237,55 @@ async function generateQR(data) {
 }
 
 // ── USER SELECT SCREEN ────────────────────────────────────────────────────────
+// ── USER SELECT + PIN SCREEN ──────────────────────────────────────────────────
 function UserSelectScreen({ users, onSelect, onCreateFirst }) {
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [pin, setPin]                   = useState("");
+  const [error, setError]               = useState("");
+  const [shake, setShake]               = useState(false);
+
+  function handleUserClick(u) {
+    setSelectedUser(u);
+    setPin("");
+    setError("");
+  }
+
+  function handleDigit(d) {
+    if (pin.length >= 4) return;
+    const next = pin + d;
+    setPin(next);
+    if (next.length === 4) {
+      setTimeout(() => checkPin(next), 150);
+    }
+  }
+
+  function checkPin(p) {
+    if (!selectedUser.pin) {
+      // No PIN set — let them in anyway (backwards compat)
+      onSelect(selectedUser);
+      return;
+    }
+    if (p === selectedUser.pin) {
+      onSelect(selectedUser);
+    } else {
+      setShake(true);
+      setError("PIN incorrecto");
+      setPin("");
+      setTimeout(() => setShake(false), 600);
+    }
+  }
+
+  function handleDelete() {
+    setPin(p => p.slice(0, -1));
+    setError("");
+  }
+
+  const roleInfo = selectedUser ? ROLES[selectedUser.role] || ROLES.cocinero : null;
+
   return (
     <div style={{ minHeight:"100vh", background:C.dark, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:28 }}>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}`}</style>
+
       {/* Logo */}
       <div style={{ marginBottom:32, textAlign:"center" }}>
         <div style={{ width:72, height:72, background:C.accent, borderRadius:20, display:"flex", alignItems:"center", justifyContent:"center", fontSize:34, margin:"0 auto 14px" }}>⊛</div>
@@ -226,30 +294,75 @@ function UserSelectScreen({ users, onSelect, onCreateFirst }) {
       </div>
 
       <div style={{ width:"100%", maxWidth:360 }}>
-        <div style={{ fontSize:12, fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase", color:C.text3, marginBottom:14, textAlign:"center" }}>¿Quién está cocinando hoy?</div>
 
-        {users.length === 0 ? (
-          <div style={{ textAlign:"center", background:"rgba(255,255,255,.05)", borderRadius:16, padding:28 }}>
-            <div style={{ fontSize:36, marginBottom:10 }}>👤</div>
-            <div style={{ color:"#fff", fontSize:15, fontWeight:600, marginBottom:6 }}>Sin usuarios configurados</div>
-            <div style={{ color:C.text3, fontSize:13, marginBottom:20 }}>Crea el primer usuario para empezar</div>
-            <button onClick={onCreateFirst} style={{ ...B("orange"), fontSize:15, padding:"14px 28px", width:"100%" }}>Crear primer usuario</button>
-          </div>
-        ) : (
-          <div style={{ display:"grid", gap:10 }}>
-            {users.map(u => (
-              <button key={u.id} onClick={() => onSelect(u)}
-                style={{ background:"rgba(255,255,255,.07)", border:"1.5px solid rgba(255,255,255,.12)", borderRadius:16, padding:"16px 18px", cursor:"pointer", textAlign:"left", display:"flex", alignItems:"center", gap:14, WebkitTapHighlightColor:"transparent" }}>
-                <div style={{ width:46, height:46, borderRadius:"50%", background:C.accent, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0, fontWeight:800, color:"#fff" }}>
-                  {u.name.charAt(0).toUpperCase()}
-                </div>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontWeight:700, fontSize:16, color:"#fff" }}>{u.name}</div>
-                  <div style={{ fontSize:12, color:C.text3, marginTop:3 }}>{u.role || "Sin rol"}</div>
-                </div>
-                <div style={{ color:C.text3, fontSize:18 }}>›</div>
-              </button>
-            ))}
+        {/* ── Step 1: Select user ── */}
+        {!selectedUser && (
+          <>
+            <div style={{ fontSize:12, fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase", color:C.text3, marginBottom:14, textAlign:"center" }}>¿Quién eres?</div>
+            {users.length === 0 ? (
+              <div style={{ textAlign:"center", background:"rgba(255,255,255,.05)", borderRadius:16, padding:28 }}>
+                <div style={{ fontSize:36, marginBottom:10 }}>👤</div>
+                <div style={{ color:"#fff", fontSize:15, fontWeight:600, marginBottom:6 }}>Sin usuarios configurados</div>
+                <div style={{ color:C.text3, fontSize:13, marginBottom:20 }}>Crea el primer usuario para empezar</div>
+                <button onClick={onCreateFirst} style={{ ...B("orange"), fontSize:15, padding:"14px 28px", width:"100%" }}>Crear primer usuario</button>
+              </div>
+            ) : (
+              <div style={{ display:"grid", gap:10 }}>
+                {users.map(u => {
+                  const ri = ROLES[u.role] || ROLES.cocinero;
+                  return (
+                    <button key={u.id} onClick={() => handleUserClick(u)}
+                      style={{ background:"rgba(255,255,255,.07)", border:"1.5px solid rgba(255,255,255,.12)", borderRadius:16, padding:"16px 18px", cursor:"pointer", textAlign:"left", display:"flex", alignItems:"center", gap:14, WebkitTapHighlightColor:"transparent" }}>
+                      <div style={{ width:46, height:46, borderRadius:"50%", background:ri.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0, fontWeight:800, color:"#fff" }}>
+                        {u.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontWeight:700, fontSize:16, color:"#fff" }}>{u.name}</div>
+                        <div style={{ fontSize:12, color:C.text3, marginTop:3 }}>{ri.icon} {ri.label}</div>
+                      </div>
+                      <div style={{ color:C.text3, fontSize:18 }}>›</div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ── Step 2: Enter PIN ── */}
+        {selectedUser && (
+          <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:20 }}>
+            {/* Back + user info */}
+            <div style={{ display:"flex", alignItems:"center", gap:12, width:"100%" }}>
+              <button onClick={()=>{setSelectedUser(null);setPin("");setError("");}} style={{ background:"rgba(255,255,255,.08)", border:"none", cursor:"pointer", color:"#fff", borderRadius:10, padding:"8px 12px", fontSize:13 }}>← Volver</button>
+              <div style={{ flex:1, textAlign:"center" }}>
+                <div style={{ fontWeight:700, fontSize:16, color:"#fff" }}>{selectedUser.name}</div>
+                <div style={{ fontSize:12, color:C.text3 }}>{roleInfo?.icon} {roleInfo?.label}</div>
+              </div>
+              <div style={{ width:60 }}/>
+            </div>
+
+            {/* PIN dots */}
+            <div style={{ animation:shake?"shake .5s":"none" }}>
+              <div style={{ display:"flex", gap:14, justifyContent:"center", marginBottom:8 }}>
+                {[0,1,2,3].map(i=>(
+                  <div key={i} style={{ width:18, height:18, borderRadius:"50%", background:pin.length>i?"#fff":"rgba(255,255,255,.2)", transition:"background .1s", border:"2px solid rgba(255,255,255,.3)" }}/>
+                ))}
+              </div>
+              {error && <div style={{ textAlign:"center", color:"#FF8A80", fontSize:13, fontWeight:600 }}>{error}</div>}
+              {!selectedUser.pin && <div style={{ textAlign:"center", color:C.text3, fontSize:12 }}>Sin PIN configurado — pulsa cualquier número</div>}
+            </div>
+
+            {/* Numpad */}
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, width:"100%", maxWidth:280 }}>
+              {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=>(
+                <button key={i} onClick={()=>d==="⌫"?handleDelete():d!==""&&handleDigit(String(d))}
+                  disabled={d===""}
+                  style={{ height:72, borderRadius:16, border:"1.5px solid rgba(255,255,255,.15)", background:d==="⌫"?"rgba(255,255,255,.05)":"rgba(255,255,255,.1)", color:"#fff", fontSize:d==="⌫"?24:28, fontWeight:600, cursor:d===""?"default":"pointer", opacity:d===""?0:1, WebkitTapHighlightColor:"transparent" }}>
+                  {d}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -257,31 +370,48 @@ function UserSelectScreen({ users, onSelect, onCreateFirst }) {
   );
 }
 
-// ── USER MODAL ────────────────────────────────────────────────────────────────
+
 function UserModal({ user, restaurants, onClose, onSave, onDelete }) {
   const isNew = !user;
-  const [f, setF] = useState(user || { name:"", role:"", restaurantId:"", pin:"" });
+  const [f, setF] = useState(user || { name:"", role:"admin", restaurantId:"", pin:"" });
   const [confirmDel, setConfirmDel] = useState(false);
-  const roles = ["Jefe de cocina","Cocinero/a","Ayudante de cocina","Responsable de local","Repartidor/a","Administración"];
+  const [showPin, setShowPin] = useState(false);
+  const [pinEntry, setPinEntry] = useState(user?.pin||"");
+
+  function handlePinDigit(d) {
+    if(pinEntry.length<4){ const n=pinEntry+d; setPinEntry(n); setF(p=>({...p,pin:n})); }
+  }
+  function handlePinDel() {
+    const n=pinEntry.slice(0,-1); setPinEntry(n); setF(p=>({...p,pin:n}));
+  }
+
   return (
     <div style={OVR} onClick={onClose}>
-      <div style={{ ...MDL, maxWidth:420 }} onClick={e => e.stopPropagation()}>
+      <div style={{ ...MDL, maxWidth:440, maxHeight:"92vh", overflowY:"auto" }} onClick={e=>e.stopPropagation()}>
         <div style={MHDR}>
           <div>
-            <div style={{ fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:"#64748b" }}>{isNew?"Nuevo usuario":"Editar usuario"}</div>
-            {!isNew && <div style={{ fontWeight:800, fontSize:15, marginTop:2 }}>{f.name}</div>}
+            <div style={{ fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.text3 }}>{isNew?"Nuevo usuario":"Editar usuario"}</div>
+            {!isNew&&<div style={{ fontWeight:800, fontSize:15, marginTop:2 }}>{f.name}</div>}
           </div>
           <button onClick={onClose} style={CBTN}>✕</button>
         </div>
-        <div style={{ marginTop:14, display:"flex", flexDirection:"column", gap:12 }}>
+        <div style={{ marginTop:16, display:"flex", flexDirection:"column", gap:14 }}>
           <label style={LBL}>Nombre completo *<input style={INP} value={f.name} onChange={e=>setF({...f,name:e.target.value})} placeholder="Ej: Ana García"/></label>
-          <label style={LBL}>
-            Rol / Puesto
-            <select style={INP} value={f.role} onChange={e=>setF({...f,role:e.target.value})}>
-              <option value="">Sin rol específico</option>
-              {roles.map(r=><option key={r}>{r}</option>)}
-            </select>
-          </label>
+          <div>
+            <div style={{ fontSize:13, fontWeight:600, color:C.text2, marginBottom:8 }}>Rol y permisos</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+              {Object.entries(ROLES).map(([key,ri])=>(
+                <button key={key} type="button" onClick={()=>setF({...f,role:key})}
+                  style={{ padding:"12px 10px", borderRadius:12, border:`2px solid ${f.role===key?ri.color:C.border}`, background:f.role===key?ri.color+"15":C.surface2, cursor:"pointer", textAlign:"left" }}>
+                  <div style={{ fontSize:20, marginBottom:4 }}>{ri.icon}</div>
+                  <div style={{ fontWeight:700, fontSize:13, color:f.role===key?ri.color:C.text }}>{ri.label}</div>
+                  <div style={{ fontSize:11, color:C.text3, marginTop:2 }}>
+                    {key==="admin"?"Acceso total":key==="manager"?"Sin ajustes/borrar":key==="empleado"?"Crear, stock, traspasos":"Crear y stock"}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
           <label style={LBL}>
             Local asignado por defecto
             <select style={INP} value={f.restaurantId} onChange={e=>setF({...f,restaurantId:e.target.value})}>
@@ -289,17 +419,42 @@ function UserModal({ user, restaurants, onClose, onSave, onDelete }) {
               {restaurants.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}
             </select>
           </label>
-          <div style={{ background:"#f8fafc", borderRadius:8, padding:10, fontSize:12, color:"#64748b", border:"1px solid #e2e8f0" }}>
-            💡 No se usa contraseña — cualquier persona con acceso a la URL puede seleccionar cualquier usuario. Es un sistema de firma de responsabilidad, no de seguridad.
+          <div>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+              <div style={{ fontSize:13, fontWeight:600, color:C.text2 }}>PIN de acceso (4 dígitos)</div>
+              <button type="button" onClick={()=>setShowPin(v=>!v)} style={{ ...B("ghost"), fontSize:12, padding:"4px 10px" }}>{showPin?"Ocultar":"Configurar PIN"}</button>
+            </div>
+            <div style={{ display:"flex", gap:12, justifyContent:"center", padding:"14px 0", background:C.surface2, borderRadius:12, marginBottom:showPin?10:0 }}>
+              {[0,1,2,3].map(i=>(
+                <div key={i} style={{ width:16, height:16, borderRadius:"50%", background:pinEntry.length>i?C.accent:C.border, transition:"background .1s" }}/>
+              ))}
+            </div>
+            {showPin&&(
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
+                {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=>(
+                  <button key={i} type="button"
+                    onClick={()=>d==="⌫"?handlePinDel():d!==""&&handlePinDigit(String(d))}
+                    disabled={d===""}
+                    style={{ height:56, borderRadius:12, border:`1.5px solid ${C.border}`, background:C.surface, color:C.text, fontSize:d==="⌫"?20:22, fontWeight:600, cursor:d===""?"default":"pointer", opacity:d===""?0:1 }}>
+                    {d}
+                  </button>
+                ))}
+              </div>
+            )}
+            {!showPin&&pinEntry&&(
+              <div style={{ textAlign:"center", marginTop:6 }}>
+                <button type="button" onClick={()=>{setPinEntry("");setF(p=>({...p,pin:""}));}} style={{ ...B("ghost"), fontSize:12, padding:"4px 12px" }}>Borrar PIN</button>
+              </div>
+            )}
           </div>
-          <div style={{ display:"flex", gap:8, marginTop:4 }}>
-            <button onClick={() => { if(!f.name.trim())return; onSave({...f,id:f.id||uid(),name:f.name.trim()}); onClose(); }} style={{ ...B("primary"), flex:1 }} disabled={!f.name.trim()}>
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={()=>{ if(!f.name.trim())return; onSave({...f,id:f.id||uid(),name:f.name.trim(),pin:pinEntry}); onClose(); }} style={{ ...B("primary"), flex:1 }} disabled={!f.name.trim()}>
               {isNew?"Crear usuario":"Guardar cambios"}
             </button>
-            {!isNew && !confirmDel && <button onClick={()=>setConfirmDel(true)} style={{ ...B("red"), flexShrink:0 }}>🗑</button>}
-            {!isNew && confirmDel && (
+            {!isNew&&!confirmDel&&<button onClick={()=>setConfirmDel(true)} style={{ ...B("red"), flexShrink:0 }}>🗑</button>}
+            {!isNew&&confirmDel&&(
               <div style={{ display:"flex", gap:6, flex:1 }}>
-                <button onClick={()=>{onDelete(f.id);onClose();}} style={{ ...B("red"), flex:1 }}>Sí, eliminar</button>
+                <button onClick={async()=>{await onDelete(f.id);onClose();}} style={{ ...B("red"), flex:1 }}>Sí, eliminar</button>
                 <button onClick={()=>setConfirmDel(false)} style={{ ...B("ghost"), flex:1 }}>No</button>
               </div>
             )}
@@ -1056,7 +1211,7 @@ function ProductModal({ product, restaurants, categories, catalog, currentUser, 
   const isEdit = !!product;
   const [step, setStep] = useState(isEdit?"form":"pick");
   const [search, setSearch] = useState("");
-  const defaultForm = { name:"", category:categories[0]?.id||"otros", restaurantId:currentUser?.restaurantId||restaurants[0]?.id||"", elaboration:today(), expiry:addDays(today(),7), quantity:"", unit:"kg", lot:"", notes:"" };
+  const defaultForm = { name:"", category:categories[0]?.id||"otros", restaurantId:currentUser?.restaurantId||restaurants[0]?.id||"", elaboration:today(), expiry:addDays(today(),7), quantity:"", unit:"kg", lot:"", notes:"", frozen:false };
   const [f, setF] = useState(product||defaultForm);
   const [catOpen, setCatOpen] = useState(false);
   const curCat = categories.find(c=>c.id===f.category);
@@ -1179,6 +1334,22 @@ function ProductModal({ product, restaurants, categories, catalog, currentUser, 
               </div>
             </div>
             <label style={LBL}>Notas / Alérgenos<textarea style={{ ...INP, resize:"vertical", height:60 }} value={f.notes} onChange={e=>setF({...f,notes:e.target.value})} placeholder="Alérgenos, ingredientes..."/></label>
+            {/* Frozen toggle */}
+            <button type="button" onClick={()=>setF({...f,frozen:!f.frozen})}
+              style={{ display:"flex", alignItems:"center", gap:12, padding:"13px 16px", borderRadius:14, border:`2px solid ${f.frozen?"#38BDF8":C.border}`, background:f.frozen?"#E0F7FF":C.surface2, cursor:"pointer", textAlign:"left", width:"100%" }}>
+              <span style={{ fontSize:26 }}>{f.frozen?"🧊":"⬜"}</span>
+              <div>
+                <div style={{ fontWeight:700, fontSize:14, color:f.frozen?"#0369A1":C.text }}>
+                  {f.frozen ? "Producto congelado" : "Marcar como congelado"}
+                </div>
+                <div style={{ fontSize:12, color:C.text3, marginTop:1 }}>
+                  {f.frozen ? "Se mostrará con indicador ❄️" : "Activa si este producto está en el congelador"}
+                </div>
+              </div>
+              <div style={{ marginLeft:"auto", width:24, height:24, borderRadius:"50%", background:f.frozen?"#38BDF8":C.border, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                {f.frozen && <span style={{ color:"#fff", fontSize:14, fontWeight:800 }}>✓</span>}
+              </div>
+            </button>
             <button onClick={()=>{if(!f.name||!f.restaurantId)return;onSave({...f,id:f.id||uid(),createdBy:currentUser?.id||""});onClose();}} style={{ ...B("primary"), width:"100%" }} disabled={!f.name||!f.restaurantId}>
               {isEdit?"Guardar cambios":"Registrar elaboración"}
             </button>
@@ -1273,7 +1444,7 @@ function Sidebar({ open, onClose, tab, setTab, restsCount, allCount, currentUser
 
         {/* Nav items */}
         <nav style={{ flex:1, overflowY:"auto", padding:"12px 10px" }}>
-          {NAVS.map(n => {
+          {NAVS.filter(n=>can(currentUser,n.id)).map(n => {
             const active = tab === n.id;
             const badge  = n.id==="restaurants" ? restsCount : n.id==="products" ? allCount : null;
             return (
@@ -1293,18 +1464,18 @@ function Sidebar({ open, onClose, tab, setTab, restsCount, allCount, currentUser
         {/* Quick actions */}
         <div style={{ padding:"14px", borderTop:"1px solid rgba(255,255,255,.08)", display:"flex", flexDirection:"column", gap:10 }}>
           <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase", color:C.text3, marginBottom:2 }}>Acciones rapidas</div>
-          <button onClick={() => { onNewProduct(); onClose(); }}
+          {can(currentUser,"products.create")&&<button onClick={() => { onNewProduct(); onClose(); }}
             style={{ ...B("orange"), width:"100%", textAlign:"left", display:"flex", alignItems:"center", gap:10, fontSize:14, padding:"13px 16px" }}>
             <span style={{ fontSize:18 }}>＋</span> Nuevo producto
-          </button>
-          <button onClick={() => { onScan(); onClose(); }}
+          </button>}
+          {can(currentUser,"scan")&&<button onClick={() => { onScan(); onClose(); }}
             style={{ width:"100%", textAlign:"left", display:"flex", alignItems:"center", gap:10, fontSize:14, background:"rgba(255,255,255,.07)", color:"rgba(255,255,255,.8)", border:"1px solid rgba(255,255,255,.12)", borderRadius:12, padding:"13px 16px", cursor:"pointer", fontWeight:600, WebkitTapHighlightColor:"transparent" }}>
             <span style={{ fontSize:18 }}>📷</span> Escanear QR
-          </button>
-          <button onClick={onExport}
+          </button>}
+          {can(currentUser,"settings")&&<button onClick={onExport}
             style={{ width:"100%", textAlign:"left", display:"flex", alignItems:"center", gap:10, fontSize:14, background:"rgba(255,255,255,.07)", color:"rgba(255,255,255,.8)", border:"1px solid rgba(255,255,255,.12)", borderRadius:12, padding:"13px 16px", cursor:"pointer", fontWeight:600, WebkitTapHighlightColor:"transparent" }}>
             <span style={{ fontSize:18 }}>📊</span> Exportar Excel
-          </button>
+          </button>}
         </div>
       </div>
     </>
@@ -1360,16 +1531,14 @@ export default function App() {
     return () => unsubs.forEach(u=>u());
   }, []);
 
-  // Restore user from localStorage
+  // Always show user select on load (session expires on reload)
   useEffect(() => {
-    const saved = localStorage.getItem("trazapro_user");
-    if (saved) { try { setCurrentUser(JSON.parse(saved)); } catch {} }
-    else setShowUserSel(true);
+    setShowUserSel(true);
   }, []);
 
   function selectUser(u) {
     setCurrentUser(u);
-    localStorage.setItem("trazapro_user", JSON.stringify(u));
+    // Session intentionally NOT saved to localStorage — expires on app close/reload
     setShowUserSel(false);
   }
 
@@ -1466,7 +1635,7 @@ export default function App() {
     const ms=!search||p.name.toLowerCase().includes(search.toLowerCase())||p.lot?.toLowerCase().includes(search.toLowerCase());
     const mr=fRest==="all"||p.restaurantId===fRest;
     const mc=fCat==="all"||p.category===fCat;
-    const mst=fSt==="all"||(fSt==="expired"&&isExp(p.expiry))||(fSt==="near"&&isNear(p.expiry))||(fSt==="ok"&&!isExp(p.expiry)&&!isNear(p.expiry));
+    const mst=fSt==="all"||(fSt==="expired"&&isExp(p.expiry))||(fSt==="near"&&isNear(p.expiry))||(fSt==="ok"&&!isExp(p.expiry)&&!isNear(p.expiry))||(fSt==="frozen"&&p.frozen);
     return ms&&mr&&mc&&mst;
   });
 
@@ -1518,8 +1687,11 @@ export default function App() {
           </button>
           {/* User avatar */}
           <button onClick={()=>setShowUserSel(true)}
-            style={{ width:38, height:38, borderRadius:"50%", background:C.accent, border:"2px solid rgba(255,255,255,.2)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, fontWeight:800, color:"#fff", cursor:"pointer" }}>
-            {currentUser.name.charAt(0).toUpperCase()}
+            style={{ display:"flex", alignItems:"center", gap:6, background:"rgba(255,255,255,.1)", border:"1px solid rgba(255,255,255,.15)", borderRadius:10, padding:"5px 10px 5px 6px", cursor:"pointer" }}>
+            <div style={{ width:28, height:28, borderRadius:"50%", background:ROLES[currentUser.role]?.color||C.accent, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:800, color:"#fff" }}>
+              {currentUser.name.charAt(0).toUpperCase()}
+            </div>
+            <span style={{ fontSize:12, fontWeight:600, color:"#fff", maxWidth:70, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{currentUser.name}</span>
           </button>
         </div>
       </div>
@@ -1533,7 +1705,7 @@ export default function App() {
           {tab==="restaurants"&&<span style={bdg("blue")}>{restaurants.length}</span>}
         </div>
         {/* Context action button */}
-        {tab==="products"&&<button onClick={()=>{setSel(null);setModal("product");}} style={{ ...B("orange"), padding:"10px 18px", fontSize:14 }}>Nuevo producto</button>}
+        {tab==="products"&&can(currentUser,"products.create")&&<button onClick={()=>{setSel(null);setModal("product");}} style={{ ...B("orange"), padding:"10px 18px", fontSize:14 }}>Nuevo producto</button>}
         {tab==="restaurants"&&<button onClick={()=>{setSel(null);setModal("restaurant");}} style={{ ...B("orange"), padding:"10px 18px", fontSize:14 }}>+ Local</button>}
         {tab==="transfers"&&<button onClick={()=>setModal("transfer")} style={{ ...B("orange"), padding:"10px 18px", fontSize:14 }}>Transferir</button>}
       </div>
@@ -1710,8 +1882,18 @@ export default function App() {
                 </button>
               ))}
             </div>
+            {/* Category filter chips */}
             <div style={{ display:"flex", gap:8, overflowX:"auto", paddingBottom:2 }}>
-              {[{v:"all",l:"Todos los estados"},{v:"ok",l:"OK"},{v:"near",l:"Caduca pronto"},{v:"expired",l:"Caducados"}].map(s=>(
+              {[{v:"all",l:"Todas las categorías"},...cats.map(c=>({v:c.id,l:`${c.icon} ${c.label}`}))].map(c=>(
+                <button key={c.v} onClick={()=>setFCat(c.v)}
+                  style={{ flexShrink:0, padding:"8px 14px", borderRadius:20, border:`1.5px solid ${fCat===c.v?C.accent:C.border}`, background:fCat===c.v?C.accentBg:C.surface, color:fCat===c.v?C.accent:C.text2, fontSize:13, fontWeight:fCat===c.v?700:400, cursor:"pointer", whiteSpace:"nowrap" }}>
+                  {c.l}
+                </button>
+              ))}
+            </div>
+            {/* Status + frozen filter chips */}
+            <div style={{ display:"flex", gap:8, overflowX:"auto", paddingBottom:2 }}>
+              {[{v:"all",l:"Todos los estados"},{v:"ok",l:"✅ OK"},{v:"near",l:"⏱ Caduca pronto"},{v:"expired",l:"⚠️ Caducados"},{v:"frozen",l:"❄️ Congelados"}].map(s=>(
                 <button key={s.v} onClick={()=>setFSt(s.v)}
                   style={{ flexShrink:0, padding:"8px 14px", borderRadius:20, border:`1.5px solid ${fSt===s.v?C.accent:C.border}`, background:fSt===s.v?C.accentBg:C.surface, color:fSt===s.v?C.accent:C.text2, fontSize:13, fontWeight:fSt===s.v?700:400, cursor:"pointer", whiteSpace:"nowrap" }}>
                   {s.l}
@@ -1735,11 +1917,15 @@ export default function App() {
                       {/* Product main row */}
                       <div style={{ padding:"14px 16px" }}>
                         <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
-                          <div style={{ width:48, height:48, background:expired_p?C.redBg:near_p?C.amberBg:C.surface2, borderRadius:13, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, flexShrink:0 }}>{cat?.icon||"📦"}</div>
+                          <div style={{ width:48, height:48, background:expired_p?C.redBg:near_p?C.amberBg:p.frozen?"#E0F7FF":C.surface2, borderRadius:13, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, flexShrink:0, position:"relative" }}>
+                            {cat?.icon||"📦"}
+                            {p.frozen&&<span style={{ position:"absolute", bottom:-2, right:-2, fontSize:14 }}>❄️</span>}
+                          </div>
                           <div style={{ flex:1, minWidth:0 }}>
                             <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginBottom:4 }}>
                               <span style={{ fontWeight:700, fontSize:16, color:C.text }}>{p.name}</span>
                               <StatusBadge expiry={p.expiry}/>
+                              {p.frozen&&<span style={{ background:"#E0F7FF", color:"#0369A1", border:"1px solid #38BDF833", borderRadius:8, padding:"2px 8px", fontSize:11, fontWeight:700 }}>❄️ Congelado</span>}
                             </div>
                             <div style={{ fontSize:13, color:C.text2 }}>🏠 {rest?.name}</div>
                             <div style={{ display:"flex", flexWrap:"wrap", gap:"4px 12px", marginTop:6, fontSize:12, color:C.text3 }}>
@@ -1755,10 +1941,10 @@ export default function App() {
                       {/* Action bar */}
                       <div style={{ display:"flex", borderTop:`1px solid ${C.border}`, background:C.surface2 }}>
                         {[
-                          {icon:"🏷", label:"Etiqueta", action:()=>{setSel(p);setModal("label");}},
-                          {icon:"✏️", label:"Editar",   action:()=>{setSel(p);setModal("product");}},
-                          {icon:"🗑", label:"Borrar",   action:()=>{if(window.confirm("¿Eliminar "+p.name+"?"))deleteProduct(p.id);}, red:true},
-                        ].map(a=>(
+                          {icon:"🏷", label:"Etiqueta", action:()=>{setSel(p);setModal("label");}, perm:"products"},
+                          {icon:"✏️", label:"Editar",   action:()=>{setSel(p);setModal("product");}, perm:"products.edit"},
+                          {icon:"🗑", label:"Borrar",   action:()=>{if(window.confirm("¿Eliminar "+p.name+"?"))deleteProduct(p.id);}, red:true, perm:"products.delete"},
+                        ].filter(a=>can(currentUser,a.perm)).map(a=>(
                           <button key={a.label} onClick={a.action}
                             style={{ flex:1, padding:"12px 4px", border:"none", background:"transparent", cursor:"pointer", fontSize:12, color:a.red?C.red:C.text2, fontWeight:600, display:"flex", flexDirection:"column", alignItems:"center", gap:3, borderRight:`1px solid ${C.border}` }}>
                             <span style={{ fontSize:18 }}>{a.icon}</span>
@@ -1897,7 +2083,11 @@ export default function App() {
                 <div style={{ fontWeight:600, fontSize:16, color:C.text2 }}>Sin eventos registrados</div>
               </div>
               :<div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                {history.map((h,i)=>{
+                {[...history].sort((a,b)=>{
+                  const da = (a.date||"")+(a.time||"");
+                  const db2 = (b.date||"")+(b.time||"");
+                  return db2.localeCompare(da);
+                }).map((h,i)=>{
                   const p=products.find(x=>x.id===h.productId), rest=restaurants.find(r=>r.id===h.restaurantId), u=umap[h.userId];
                   const TI={
                     created:     {i:"✨",c:C.green,    bg:C.greenBg, l:"Elaboración"},
