@@ -1589,7 +1589,7 @@ export default function App() {
               ))}
             </div>
             <div style={{ display:"flex", gap:8, overflowX:"auto", paddingBottom:2 }}>
-              {[{v:"all",l:"Todos los estados"},{v:"ok",l:{t("ok")}},{v:"near",l:{t("nearExpiry")}},{v:"expired",l:{t("expired")}}].map(s=>(
+              {[{v:"all",l:t("allStates")},{v:"ok",l:t("ok")},{v:"near",l:t("nearExpiry")},{v:"expired",l:t("expired")}].map(s=>(
                 <button key={s.v} onClick={()=>setFSt(s.v)}
                   style={{ flexShrink:0, padding:"8px 14px", borderRadius:20, border:`1.5px solid ${fSt===s.v?C.accent:C.border}`, background:fSt===s.v?C.accentBg:C.surface, color:fSt===s.v?C.accent:C.text2, fontSize:13, fontWeight:fSt===s.v?700:400, cursor:"pointer", whiteSpace:"nowrap" }}>
                   {s.l}
