@@ -22,7 +22,7 @@ const stockLevel = (p) => {
   } catch { return "unknown"; }
 };
 const addDays = (d, n) => { const dt = new Date(d); dt.setDate(dt.getDate() + n); return dt.toISOString().slice(0, 10); };
-const fmt     = d => { if (!d) return "—"; const [y, m, day] = d.split("-"); return `${day}/${m}/${y}`; };
+const fmt     = d => { try { if (!d) return "—"; const [y, m, day] = (d||"").split("-"); if(!day) return String(d); return `${day}/${m}/${y}`; } catch { return "—"; } };
 const nowTime = () => new Date().toTimeString().slice(0, 5);
 const isExp   = d => d && d < today();
 const isNear  = d => d && d >= today() && d <= addDays(today(), 3);
@@ -931,30 +931,31 @@ function InventoryModal({ restaurants, categories, products, currentUser, onClos
   }
 
   function computedDiff(item) {
-    const exp = parseFloat(item.expected);
-    const act = parseFloat(item.actual);
-    if(isNaN(act)) return null;
-    if(isNaN(exp)) return act;
-    return act - exp;
+    try {
+      const exp = parseFloat(item.expected);
+      const act = parseFloat(item.actual);
+      if(isNaN(act)) return null;
+      if(isNaN(exp)) return act;
+      return Math.round((act - exp) * 1000) / 1000; // avoid floating point weirdness
+    } catch { return null; }
   }
 
   async function confirm() {
     setSaving(true);
-    const finalItems = items.map(i => ({
-      ...i,
-      diff: computedDiff(i),
-    }));
-    await onSave({
-      id:           uid(),
-      restaurantId: restId,
-      categoryId:   catId,
-      date:         today(),
-      time:         nowTime(),
-      userId:       currentUser?.id || "",
-      items:        finalItems,
-    });
-    setSaving(false);
-    onClose();
+    try {
+      const finalItems = (Array.isArray(items)?items:[]).map(i => { try { return { ...i, diff: computedDiff(i) }; } catch { return i; } });
+      await onSave({
+        id:           uid(),
+        restaurantId: restId,
+        categoryId:   catId,
+        date:         today(),
+        time:         nowTime(),
+        userId:       currentUser?.id || "",
+        items:        finalItems,
+      });
+      onClose();
+    } catch(e) { console.error("Inventory save error:", e); }
+    finally { setSaving(false); }
   }
 
   const countedItems  = items.filter(i => i.actual !== "");
@@ -988,15 +989,14 @@ function InventoryModal({ restaurants, categories, products, currentUser, onClos
               <Picker label="Local" value={restId} onChange={setRestId} options={restOpts} placeholder="Seleccionar local..."/>
               <Picker label="Categoría a contar" value={catId} onChange={setCatId} options={catOpts} placeholder="Seleccionar categoría..."/>
               {catId && restId && (()=>{
-                const count = products.filter(p=>p.restaurantId===restId&&p.category===catId).length;
-                return (
-                  <div style={{background:C.surface2, borderRadius:12, padding:"12px 14px", fontSize:13, color:C.text2}}>
-                    {count===0
-                      ? "No hay productos de esta categoría en este local."
-                      : `${count} producto${count!==1?"s":""} para contar en este local.`
-                    }
-                  </div>
-                );
+                try {
+                  const count = products.filter(p=>p.restaurantId===restId&&p.category===catId).length;
+                  return (
+                    <div style={{background:C.surface2, borderRadius:12, padding:"12px 14px", fontSize:13, color:C.text2}}>
+                      {count===0 ? "No hay productos de esta categoría en este local." : `${count} producto${count!==1?"s":""} para contar en este local.`}
+                    </div>
+                  );
+                } catch { return null; }
               })()}
               <button
                 onClick={startCount}
@@ -1199,7 +1199,7 @@ function RestaurantModal({ restaurant, onClose, onSave, onDelete, productCount=0
           <label style={LBL}>Notas<textarea style={{ ...INP, resize:"vertical", height:60 }} value={f.notes} onChange={set("notes")}/></label>
           {!isNew&&<div style={{ background:C.surface2, borderRadius:8, padding:10, fontSize:12, color:C.text2 }}>{productCount} productos registrados</div>}
           <div style={{ display:"flex", gap:8 }}>
-            <button onClick={()=>{if(!f.name.trim())return;onSave({...f,id:f.id||uid()});onClose();}} style={{ ...B("primary"), flex:1 }} disabled={!f.name.trim()}>{isNew?"Crear local":"Guardar"}</button>
+            <button onClick={async()=>{if(!f.name.trim())return;try{await onSave({...f,id:f.id||uid(),name:f.name.trim(),pin:pinEntry});onClose();}catch(e){console.error("UserModal save error:",e);}}} style={{ ...B("primary"), flex:1 }} disabled={!f.name.trim()}>
             {!isNew&&!confirmDel&&<button onClick={()=>setConfirmDel(true)} style={{ ...B("red"), flexShrink:0 }}>🗑</button>}
             {!isNew&&confirmDel&&<div style={{ display:"flex", gap:6, flex:1 }}><button onClick={()=>{onDelete(f.id);onClose();}} style={{ ...B("red"), flex:1 }}>Sí</button><button onClick={()=>setConfirmDel(false)} style={{ ...B("ghost"), flex:1 }}>No</button></div>}
           </div>
@@ -1221,9 +1221,11 @@ function ProductModal({ product, restaurants, categories, catalog, currentUser, 
   const [addingUnitForm, setAddingUnitForm] = useState(false);
   const [customUnitForm, setCustomUnitForm] = useState("");
   const [formUnits, setFormUnits] = useState(()=>{
-    const saved = localStorage.getItem("trazapro_units");
-    const extra = saved ? JSON.parse(saved) : [];
-    return [...DEFAULT_UNITS, ...extra.filter(u=>!DEFAULT_UNITS.includes(u))];
+    try {
+      const saved = localStorage.getItem("trazapro_units");
+      const extra = saved ? JSON.parse(saved) : [];
+      return [...DEFAULT_UNITS, ...extra.filter(u=>!DEFAULT_UNITS.includes(u))];
+    } catch { return [...DEFAULT_UNITS]; }
   });
 
   function applyTemplate(tpl) {
@@ -1323,14 +1325,14 @@ function ProductModal({ product, restaurants, categories, catalog, currentUser, 
               <div>
                 <label style={LBL}>Unidad
                   <select style={INP} value={f.unit} onChange={e=>{ if(e.target.value==="__new__") setAddingUnitForm(true); else setF({...f,unit:e.target.value}); }}>
-                    {formUnits.map(u=><option key={u} value={u}>{u}</option>)}
+                    {(Array.isArray(formUnits)?formUnits:DEFAULT_UNITS).map(u=><option key={u} value={u}>{u}</option>)}
                     <option value="__new__">+ Nueva unidad...</option>
                   </select>
                 </label>
                 {addingUnitForm&&(
                   <div style={{ display:"flex", gap:6, marginTop:6 }}>
                     <input style={{ ...INP, flex:1, padding:"8px 10px", fontSize:13 }} value={customUnitForm} onChange={e=>setCustomUnitForm(e.target.value)} placeholder="Ej: pallets" autoFocus onKeyDown={e=>{ if(e.key==="Enter"){ const u=customUnitForm.trim(); if(u&&!formUnits.includes(u)){const nu=[...formUnits,u];setFormUnits(nu);const s=JSON.parse(localStorage.getItem("trazapro_units")||"[]");localStorage.setItem("trazapro_units",JSON.stringify([...s,u]));setF({...f,unit:u});}setCustomUnitForm("");setAddingUnitForm(false);}}}/>
-                    <button onClick={()=>{ const u=customUnitForm.trim(); if(u&&!formUnits.includes(u)){const nu=[...formUnits,u];setFormUnits(nu);const s=JSON.parse(localStorage.getItem("trazapro_units")||"[]");localStorage.setItem("trazapro_units",JSON.stringify([...s,u]));setF({...f,unit:u});}setCustomUnitForm("");setAddingUnitForm(false);}} style={{ ...B("orange"), padding:"8px 12px", fontSize:13 }}>+</button>
+                    <button onClick={()=>{ const u=customUnitForm.trim(); if(u&&!formUnits.includes(u)){const nu=[...formUnits,u];setFormUnits(nu);try{const s=JSON.parse(localStorage.getItem("trazapro_units")||"[]");localStorage.setItem("trazapro_units",JSON.stringify([...s,u]));}catch{}setF({...f,unit:u});}setCustomUnitForm("");setAddingUnitForm(false);}} style={{ ...B("orange"), padding:"8px 12px", fontSize:13 }}>+</button>
                     <button onClick={()=>{setAddingUnitForm(false);setCustomUnitForm("");}} style={{ ...B("ghost"), padding:"8px 10px", fontSize:13 }}>✕</button>
                   </div>
                 )}
@@ -1374,7 +1376,21 @@ function ProductModal({ product, restaurants, categories, catalog, currentUser, 
                 {f.frozen && <span style={{ color:"#fff", fontSize:14, fontWeight:800 }}>✓</span>}
               </div>
             </button>
-            <button onClick={()=>{if(!f.name||!f.restaurantId)return;onSave({...f,id:f.id||uid(),createdBy:currentUser?.id||""});onClose();}} style={{ ...B("primary"), width:"100%" }} disabled={!f.name||!f.restaurantId}>
+            <button onClick={async()=>{
+              if(!f.name||!f.restaurantId) return;
+              try {
+                await onSave({
+                  ...f,
+                  id: f.id||uid(),
+                  createdBy: currentUser?.id||"",
+                  quantity: f.quantity===""?null:Number(f.quantity),
+                  minStock: f.minStock===""?null:Number(f.minStock),
+                  maxStock: f.maxStock===""?null:Number(f.maxStock),
+                  frozen: f.frozen===true,
+                });
+                onClose();
+              } catch(e) { console.error("Save product error:", e); }
+            }} style={{ ...B("primary"), width:"100%" }} disabled={!f.name||!f.restaurantId}>
               {isEdit?"Guardar cambios":"Registrar elaboración"}
             </button>
           </div>
@@ -1424,7 +1440,7 @@ function TransferModal({ products, restaurants, currentUser, onClose, onSave }) 
           <label style={LBL}>Cantidad<input style={INP} type="number" min="0" placeholder={hasStock?`Máx: ${prod.quantity} ${prod.unit||""}`:"Ej: 5"} value={f.qty} onChange={e=>setF({...f,qty:e.target.value})}/></label>
           <label style={LBL}>Nota (opcional)<input style={INP} value={f.note} onChange={e=>setF({...f,note:e.target.value})} placeholder="Observaciones..."/></label>
           {currentUser&&<div style={{ background:C.surface2, borderRadius:8, padding:8, fontSize:12, color:C.text2 }}>✍️ Firmado por: <strong>{currentUser.name}</strong></div>}
-          <button onClick={()=>{ if(!f.productId||!f.toRestaurantId)return; onSave({...f,fromRestaurantId:prod?.restaurantId,userId:currentUser?.id||"",date:today(),time:nowTime(),id:uid()}); onClose(); }} style={{ ...B("primary"), width:"100%" }} disabled={!f.productId||!f.toRestaurantId}>
+          <button onClick={async()=>{ if(!f.productId||!f.toRestaurantId)return; try{ await onSave({...f,fromRestaurantId:prod?.restaurantId,userId:currentUser?.id||"",date:today(),time:nowTime(),id:uid()}); onClose(); }catch(e){console.error("Transfer save error:",e);} }} style={{ ...B("primary"), width:"100%" }} disabled={!f.productId||!f.toRestaurantId}>
             Registrar transferencia →
           </button>
         </div>
@@ -1577,7 +1593,18 @@ export default function App() {
   }
 
   function addHistEntry(type, productId, restaurantId, detail, productName) {
-    fbAdd("history", { type, productId, restaurantId, detail, productName, userId:currentUser?.id||"", date:today(), time:nowTime() });
+    try {
+      fbAdd("history", {
+        type:        type||"",
+        productId:   productId||null,
+        restaurantId:restaurantId||null,
+        detail:      detail||"",
+        productName: productName||"",
+        userId:      currentUser?.id||"",
+        date:        today(),
+        time:        nowTime(),
+      });
+    } catch(e) { console.error("addHistEntry error:", e); }
   }
 
   // ── CRUD ────────────────────────────────────────────────────────────────────
@@ -1602,12 +1629,16 @@ export default function App() {
 
   async function saveProduct(p) {
     try {
-      const isNew = !products.find(x=>x.id===p.id);
-      await fbSet("products", p.id, p);
-      const rest = rmap[p.restaurantId];
-      addHistEntry(isNew?"created":"edited", p.id, p.restaurantId, isNew?`Creado en ${rest?.name}`:`Editado: ${p.name}`, p.name);
-      showToast(isNew?"Producto creado":"Producto actualizado");
-    } catch { showToast("Error al guardar el producto","error"); }
+      const isNew = !pmap[p.id];
+      // Sanitize — remove undefined values that Firestore rejects
+      const clean = Object.fromEntries(
+        Object.entries(p).filter(([,v]) => v !== undefined)
+      );
+      await fbSet("products", clean.id, clean);
+      const rest = rmap[clean.restaurantId];
+      addHistEntry(isNew?"created":"edited", clean.id, clean.restaurantId, isNew?`Creado en ${rest?.name}`:`Editado: ${clean.name}`, clean.name);
+      showToast(isNew?"Producto creado ✓":"Producto actualizado ✓");
+    } catch(e) { console.error("saveProduct error:", e); showToast("Error al guardar el producto","error"); }
   }
   async function deleteProduct(id) {
     try { await fbDel("products", id); showToast("Producto eliminado"); }
@@ -2000,10 +2031,12 @@ export default function App() {
                               {p.elaboration&&<span>📅 Elab: {fmt(p.elaboration)}</span>}
                               {p.expiry&&<span style={{ color:expired_p?C.red:near_p?C.amber:C.text3 }}>⏱ Cad: {fmt(p.expiry)}</span>}
                               {(p.quantity!=null&&p.quantity!=="")&&(()=>{
-                                const level=stockLevel(p)||"ok";
-                                const col={"low":C.red,"warning":C.amber,"ok":C.green,"unknown":C.text3}[level]||C.text3;
-                                const icon={"low":"🔴","warning":"🟡","ok":"🟢","unknown":"📊"}[level]||"📊";
-                                return <span style={{ color:col, fontWeight:level==="low"?700:400 }}>{icon} {p.quantity} {p.unit||""}{(p.minStock&&p.minStock!=="")?` / mín ${p.minStock}`:""}</span>;
+                                try {
+                                  const level=stockLevel(p)||"ok";
+                                  const col={"low":C.red,"warning":C.amber,"ok":C.green,"unknown":C.text3}[level]||C.text3;
+                                  const icon={"low":"🔴","warning":"🟡","ok":"🟢","unknown":"📊"}[level]||"📊";
+                                  return <span style={{ color:col, fontWeight:level==="low"?700:400 }}>{icon} {p.quantity} {p.unit||""}{(p.minStock&&p.minStock!=="")?` / mín ${p.minStock}`:""}</span>;
+                                } catch { return <span>📊 {p.quantity} {p.unit||""}</span>; }
                               })()}
                               {p.lot&&<span>🔢 {p.lot}</span>}
                             </div>
@@ -2090,9 +2123,9 @@ export default function App() {
                   const rest = restaurants.find(r=>r.id===inv.restaurantId);
                   const cat  = cats.find(c=>c.id===inv.categoryId);
                   const u    = umap[inv.userId];
-                  const changed = (inv.items||[]).filter(i=>i.diff!==null&&i.diff!==0).length;
-                  const total   = (inv.items||[]).length;
-                  const counted = (inv.items||[]).filter(i=>i.actual!=="").length;
+                  const changed = (Array.isArray(inv.items)?inv.items:[]).filter(i=>i&&i.diff!=null&&i.diff!==0).length;
+                  const total   = (Array.isArray(inv.items)?inv.items:[]).length;
+                  const counted = (Array.isArray(inv.items)?inv.items:[]).filter(i=>i&&i.actual!=="").length;
                   return (
                     <div key={inv.id} style={{background:C.surface, borderRadius:16, border:`1px solid ${C.border}`, overflow:"hidden", boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
                       {/* Header */}
@@ -2128,7 +2161,7 @@ export default function App() {
                           </div>
                         </div>
                         {/* Items with differences */}
-                        {(inv.items||[]).filter(i=>i.diff!==null&&i.diff!==0).map(item=>(
+                        {(Array.isArray(inv.items)?inv.items:[]).filter(i=>i&&i.diff!=null&&i.diff!==0).map(item=>(
                           <div key={item.productId} style={{display:"flex", justifyContent:"space-between", alignItems:"center", padding:"6px 0", borderTop:`1px solid ${C.border}`, fontSize:13}}>
                             <span style={{color:C.text, fontWeight:500}}>{item.name}</span>
                             <span style={{fontWeight:700, color:item.diff>0?C.green:C.red}}>
@@ -2314,9 +2347,11 @@ function CatalogModal({ item, categories, onClose, onSave }) {
   const [customUnit, setCustomUnit] = useState("");
   const [addingUnit, setAddingUnit] = useState(false);
   const [units, setUnits]   = useState(() => {
-    const saved = localStorage.getItem("trazapro_units");
-    const extra = saved ? JSON.parse(saved) : [];
-    return [...DEFAULT_UNITS, ...extra.filter(u => !DEFAULT_UNITS.includes(u))];
+    try {
+      const saved = localStorage.getItem("trazapro_units");
+      const extra = saved ? JSON.parse(saved) : [];
+      return [...DEFAULT_UNITS, ...extra.filter(u => !DEFAULT_UNITS.includes(u))];
+    } catch { return [...DEFAULT_UNITS]; }
   });
   const [scanning, setScanning]   = useState(false);
   const [scanErr, setScanErr]     = useState(null);
@@ -2329,8 +2364,8 @@ function CatalogModal({ item, categories, onClose, onSave }) {
     if (!u || units.includes(u)) return;
     const newUnits = [...units, u];
     setUnits(newUnits);
-    const saved = JSON.parse(localStorage.getItem("trazapro_units")||"[]");
-    localStorage.setItem("trazapro_units", JSON.stringify([...saved, u]));
+    let saved=[]; try { saved=JSON.parse(localStorage.getItem("trazapro_units")||"[]"); } catch {}
+    try { localStorage.setItem("trazapro_units", JSON.stringify([...saved, u])); } catch {}
     setF({...f, unit:u});
     setCustomUnit("");
     setAddingUnit(false);
@@ -2454,10 +2489,12 @@ function CatalogModal({ item, categories, onClose, onSave }) {
           </div>
 
           <button
-            onClick={() => {
+            onClick={async() => {
               if(!f.name.trim()) return;
-              onSave({...f, defaultDays:parseInt(daysStr)||f.defaultDays||7, id:f.id||("c"+Date.now().toString(36)), name:f.name.trim()});
-              onClose();
+              try {
+                await onSave({...f, defaultDays:parseInt(daysStr)||f.defaultDays||7, id:f.id||("c"+Date.now().toString(36)), name:f.name.trim()});
+                onClose();
+              } catch(e) { console.error("CatalogModal save error:", e); }
             }}
             style={{ ...B("primary"), width:"100%" }} disabled={!f.name.trim()}>
             {isNew ? "Crear plantilla" : "Guardar cambios"}
@@ -2498,7 +2535,7 @@ function CategoryForm({ cat, cats, onSave, onDelete, onClose }) {
       </div>
       <label style={LBL}>Nombre *<input style={INP} value={label} onChange={e=>setLabel(e.target.value)} placeholder="Ej: Fondos y caldos" autoFocus/></label>
       <div style={{ display:"flex", gap:8 }}>
-        <button onClick={()=>{if(!label.trim())return;onSave({id:cat?.id||uid(),icon,label:label.trim()});onClose();}} style={{ ...B("primary"), flex:1 }} disabled={!label.trim()}>{cat?"Guardar cambios":"Crear categoría"}</button>
+        <button onClick={async()=>{if(!label.trim())return;try{await onSave({id:cat?.id||uid(),icon,label:label.trim()});onClose();}catch(e){console.error("CategoryForm save error:",e);}}} style={{ ...B("primary"), flex:1 }} disabled={!label.trim()}>{cat?"Guardar cambios":"Crear categoría"}</button>
         {onDelete && !confirmDel && (
           <button onClick={()=>setConfirmDel(true)} style={{ ...B("red"), flexShrink:0, padding:"14px 16px" }}>🗑</button>
         )}
