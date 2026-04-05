@@ -17,7 +17,6 @@ const stockLevel = (p) => {
     const min = parseFloat(p.minStock);
     if (isNaN(qty) || p.quantity==null || p.quantity==="") return "unknown";
     if (!isNaN(min) && min>0 && p.minStock!=null && p.minStock!=="" && qty < min) return "low";
-    if (!isNaN(min) && min>0 && p.minStock!=null && p.minStock!=="" && qty < min*2) return "warning";
     return "ok";
   } catch { return "unknown"; }
 };
@@ -1647,10 +1646,22 @@ export default function App() {
 
   async function saveInventory(inv) {
     try { await fbAdd("inventories", inv); } catch { showToast("Error al guardar el recuento","error"); return; }
+    const stockErrors = [];
     for (const item of inv.items) {
       if (item.actual !== "" && item.actual !== null && item.actual !== undefined) {
-        await fbSet("products", item.productId, { quantity: parseFloat(item.actual) });
+        try {
+          const qty = parseFloat(item.actual);
+          if (!isNaN(qty)) {
+            await fbSet("products", item.productId, { quantity: qty });
+          }
+        } catch(e) {
+          console.error("Error updating stock for", item.name, e);
+          stockErrors.push(item.name);
+        }
       }
+    }
+    if (stockErrors.length > 0) {
+      showToast(`Stock guardado con errores en: ${stockErrors.join(", ")}`, "warning");
     }
     const rest = restaurants.find(r=>r.id===inv.restaurantId);
     const cat  = cats.find(c=>c.id===inv.categoryId);
@@ -2033,9 +2044,9 @@ export default function App() {
                               {(p.quantity!=null&&p.quantity!=="")&&(()=>{
                                 try {
                                   const level=stockLevel(p)||"ok";
-                                  const col={"low":C.red,"warning":C.amber,"ok":C.green,"unknown":C.text3}[level]||C.text3;
-                                  const icon={"low":"🔴","warning":"🟡","ok":"🟢","unknown":"📊"}[level]||"📊";
-                                  return <span style={{ color:col, fontWeight:level==="low"?700:400 }}>{icon} {p.quantity} {p.unit||""}{(p.minStock&&p.minStock!=="")?` / mín ${p.minStock}`:""}</span>;
+                                  const col={"low":C.red,"ok":C.green,"unknown":C.text3}[level]||C.text3;
+                                  const icon={"low":"🔴","ok":"🟢","unknown":"📊"}[level]||"📊";
+                                  return <span style={{ color:col, fontWeight:700 }}>{icon} {p.quantity} {p.unit||""}{(p.minStock&&p.minStock!=="")?` / mín ${p.minStock}`:""}</span>;
                                 } catch { return <span>📊 {p.quantity} {p.unit||""}</span>; }
                               })()}
                               {p.lot&&<span>🔢 {p.lot}</span>}
