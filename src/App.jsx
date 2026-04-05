@@ -11,13 +11,15 @@ import QRCode from "qrcode";
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const today   = () => new Date().toISOString().slice(0, 10);
 const stockLevel = (p) => {
-  const qty = parseFloat(p.quantity);
-  const min = parseFloat(p.minStock);
-  const max = parseFloat(p.maxStock);
-  if (isNaN(qty) || p.quantity==="" || p.quantity===null) return "unknown";
-  if (!isNaN(min) && p.minStock!=="" && qty < min) return "low";
-  if (!isNaN(min) && p.minStock!=="" && qty < min*2) return "warning";
-  return "ok";
+  try {
+    if (!p) return "unknown";
+    const qty = parseFloat(p.quantity);
+    const min = parseFloat(p.minStock);
+    if (isNaN(qty) || p.quantity==null || p.quantity==="") return "unknown";
+    if (!isNaN(min) && min>0 && p.minStock!=null && p.minStock!=="" && qty < min) return "low";
+    if (!isNaN(min) && min>0 && p.minStock!=null && p.minStock!=="" && qty < min*2) return "warning";
+    return "ok";
+  } catch { return "unknown"; }
 };
 const addDays = (d, n) => { const dt = new Date(d); dt.setDate(dt.getDate() + n); return dt.toISOString().slice(0, 10); };
 const fmt     = d => { if (!d) return "—"; const [y, m, day] = d.split("-"); return `${day}/${m}/${y}`; };
@@ -1213,7 +1215,7 @@ function ProductModal({ product, restaurants, categories, catalog, currentUser, 
   const [step, setStep] = useState(isEdit?"form":"pick");
   const [search, setSearch] = useState("");
   const defaultForm = { name:"", category:categories[0]?.id||"otros", restaurantId:currentUser?.restaurantId||restaurants[0]?.id||"", elaboration:today(), expiry:addDays(today(),7), quantity:"", unit:"kg", lot:"", notes:"", frozen:false, minStock:"", maxStock:"" };
-  const [f, setF] = useState(product||defaultForm);
+  const [f, setF] = useState(product ? { ...defaultForm, ...product, minStock:product.minStock??'', maxStock:product.maxStock??'', frozen:product.frozen??false } : defaultForm);
   const [catOpen, setCatOpen] = useState(false);
   const curCat = categories.find(c=>c.id===f.category);
   const [addingUnitForm, setAddingUnitForm] = useState(false);
@@ -1675,7 +1677,7 @@ export default function App() {
     const ms=!search||p.name.toLowerCase().includes(search.toLowerCase())||p.lot?.toLowerCase().includes(search.toLowerCase());
     const mr=fRest==="all"||p.restaurantId===fRest;
     const mc=fCat==="all"||p.category===fCat;
-    const mst=fSt==="all"||(fSt==="expired"&&isExp(p.expiry))||(fSt==="near"&&isNear(p.expiry))||(fSt==="ok"&&!isExp(p.expiry)&&!isNear(p.expiry))||(fSt==="frozen"&&p.frozen)||(fSt==="low"&&stockLevel(p)==="low");
+    const mst=fSt==="all"||(fSt==="expired"&&isExp(p.expiry))||(fSt==="near"&&isNear(p.expiry))||(fSt==="ok"&&!isExp(p.expiry)&&!isNear(p.expiry))||(fSt==="frozen"&&p.frozen)||(fSt==="low"&&(()=>{ try { return stockLevel(p)==="low"; } catch { return false; } })());
     return ms&&mr&&mc&&mst;
   });
 
@@ -1776,7 +1778,7 @@ export default function App() {
 
             {/* Stock low alerts */}
             {(()=>{
-              const lowStock = products.filter(p=>stockLevel(p)==="low");
+              const lowStock = products.filter(p=>{ try { return stockLevel(p)==="low"; } catch { return false; } });
               if(lowStock.length===0) return null;
               return (
                 <div style={{ background:C.redBg, borderRadius:16, padding:"16px 18px", border:`1px solid ${C.red}33` }}>
@@ -1983,7 +1985,7 @@ export default function App() {
                       {/* Product main row */}
                       <div style={{ padding:"14px 16px" }}>
                         <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
-                          <div style={{ width:48, height:48, background:expired_p?C.redBg:near_p?C.amberBg:p.frozen?"#E0F7FF":C.surface2, borderRadius:13, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, flexShrink:0, position:"relative" }}>
+                          <div style={{ width:48, height:48, background:expired_p?C.redBg:near_p?C.amberBg:(p.frozen===true)?"#E0F7FF":C.surface2, borderRadius:13, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, flexShrink:0, position:"relative" }}>
                             {cat?.icon||"📦"}
                             {p.frozen&&<span style={{ position:"absolute", bottom:-2, right:-2, fontSize:14 }}>❄️</span>}
                           </div>
@@ -1997,11 +1999,11 @@ export default function App() {
                             <div style={{ display:"flex", flexWrap:"wrap", gap:"4px 12px", marginTop:6, fontSize:12, color:C.text3 }}>
                               {p.elaboration&&<span>📅 Elab: {fmt(p.elaboration)}</span>}
                               {p.expiry&&<span style={{ color:expired_p?C.red:near_p?C.amber:C.text3 }}>⏱ Cad: {fmt(p.expiry)}</span>}
-                              {p.quantity!==""&&p.quantity!==null&&p.quantity!==undefined&&(()=>{
-                                const level=stockLevel(p);
-                                const col=level==="low"?C.red:level==="warning"?C.amber:C.green;
-                                const icon=level==="low"?"🔴":level==="warning"?"🟡":"🟢";
-                                return <span style={{ color:col, fontWeight:level==="low"?700:400 }}>{icon} {p.quantity} {p.unit}{p.minStock?` / mín ${p.minStock}`:""}</span>;
+                              {(p.quantity!=null&&p.quantity!=="")&&(()=>{
+                                const level=stockLevel(p)||"ok";
+                                const col={"low":C.red,"warning":C.amber,"ok":C.green,"unknown":C.text3}[level]||C.text3;
+                                const icon={"low":"🔴","warning":"🟡","ok":"🟢","unknown":"📊"}[level]||"📊";
+                                return <span style={{ color:col, fontWeight:level==="low"?700:400 }}>{icon} {p.quantity} {p.unit||""}{(p.minStock&&p.minStock!=="")?` / mín ${p.minStock}`:""}</span>;
                               })()}
                               {p.lot&&<span>🔢 {p.lot}</span>}
                             </div>
