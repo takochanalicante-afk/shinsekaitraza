@@ -1384,9 +1384,9 @@ function ProductModal({ product, restaurants, categories, catalog, currentUser, 
                   ...f,
                   id: f.id||uid(),
                   createdBy: currentUser?.id||"",
-                  quantity: f.quantity===""?null:Number(f.quantity),
-                  minStock: f.minStock===""?null:Number(f.minStock),
-                  maxStock: f.maxStock===""?null:Number(f.maxStock),
+                  quantity: f.quantity===""?"":Number(f.quantity)||0,
+                  minStock: f.minStock===""?"":Number(f.minStock)||0,
+                  maxStock: f.maxStock===""?"":Number(f.maxStock)||0,
                   frozen: f.frozen===true,
                 });
                 onClose();
@@ -2022,7 +2022,8 @@ export default function App() {
               </div>
               :<div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                 {filtered.map(p=>{
-                  const rest=restaurants.find(r=>r.id===p.restaurantId), cat=cmap[p.category], creator=umap[p.createdBy];
+                  try {
+                  const rest=rmap[p.restaurantId], cat=cmap[p.category], creator=umap[p.createdBy];
                   const expired_p = isExp(p.expiry), near_p = isNear(p.expiry);
                   return(
                     <div key={p.id} style={{ background:C.surface, borderRadius:16, border:`1.5px solid ${expired_p?C.red+"55":near_p?C.amber+"55":C.border}`, overflow:"hidden", boxShadow:"0 1px 4px rgba(0,0,0,.04)" }}>
@@ -2073,6 +2074,7 @@ export default function App() {
                       </div>
                     </div>
                   );
+                  } catch(e) { console.error("Product render error:", p?.id, e); return null; }
                 })}
               </div>
             }
