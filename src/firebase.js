@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD-AJTLig_IWlqHcTXe372MLxZqepButxg",
@@ -12,3 +12,13 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
+
+// Enable offline persistence — app works without internet
+// Data syncs automatically when connection is restored
+enableIndexedDbPersistence(db).catch(err => {
+  if (err.code === "failed-precondition") {
+    console.warn("Offline persistence disabled: multiple tabs open");
+  } else if (err.code === "unimplemented") {
+    console.warn("Offline persistence not supported in this browser");
+  }
+});
