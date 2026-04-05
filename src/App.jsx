@@ -1507,6 +1507,7 @@ function Sidebar({ open, onClose, tab, setTab, restsCount, allCount, currentUser
 // ── MAIN APP ──────────────────────────────────────────────────────────────────
 export default function App() {
   const [loading,      setLoading]      = useState(true);
+  const catsSeeded = useRef(false); // prevents re-seeding categories on reconnect
   const [currentUser,  setCurrentUser]  = useState(null);
   const [showUserSel,  setShowUserSel]  = useState(false);
   const [tab,          setTab]          = useState("dashboard");
@@ -1545,11 +1546,12 @@ export default function App() {
       onSnapshot(query(collection(db,"history"),  orderBy("date","desc")),s=>setHistory(s.docs.map(d=>({id:d.id,...d.data()}))), ()=>{}),
       onSnapshot(collection(db,"categories"), s=>{
         const docs=s.docs.map(d=>({id:d.id,...d.data()}));
-        if(docs.length===0){
-          // Seed default categories into Firebase on first use
+        if(docs.length===0 && !catsSeeded.current){
+          // Seed default categories ONCE on first use only
+          catsSeeded.current = true;
           DEFAULT_CATS.forEach(c=>fbSet("categories",c.id,c));
           setCategories(DEFAULT_CATS);
-        } else {
+        } else if(docs.length>0){
           setCategories(docs);
         }
       }, ()=>{}),
