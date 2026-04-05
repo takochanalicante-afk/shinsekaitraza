@@ -1199,8 +1199,10 @@ function RestaurantModal({ restaurant, onClose, onSave, onDelete, productCount=0
           {!isNew&&<div style={{ background:C.surface2, borderRadius:8, padding:10, fontSize:12, color:C.text2 }}>{productCount} productos registrados</div>}
           <div style={{ display:"flex", gap:8 }}>
             <button onClick={async()=>{if(!f.name.trim())return;try{await onSave({...f,id:f.id||uid(),name:f.name.trim(),pin:pinEntry});onClose();}catch(e){console.error("UserModal save error:",e);}}} style={{ ...B("primary"), flex:1 }} disabled={!f.name.trim()}>
+              {isNew?"Crear usuario":"Guardar cambios"}
+            </button>
             {!isNew&&!confirmDel&&<button onClick={()=>setConfirmDel(true)} style={{ ...B("red"), flexShrink:0 }}>🗑</button>}
-            {!isNew&&confirmDel&&<div style={{ display:"flex", gap:6, flex:1 }}><button onClick={()=>{onDelete(f.id);onClose();}} style={{ ...B("red"), flex:1 }}>Sí</button><button onClick={()=>setConfirmDel(false)} style={{ ...B("ghost"), flex:1 }}>No</button></div>}
+            {!isNew&&confirmDel&&<div style={{ display:"flex", gap:6, flex:1 }}><button onClick={async()=>{try{await onDelete(f.id);onClose();}catch(e){console.error(e);}}} style={{ ...B("red"), flex:1 }}>Sí</button><button onClick={()=>setConfirmDel(false)} style={{ ...B("ghost"), flex:1 }}>No</button></div>}
           </div>
         </div>
       </div>
