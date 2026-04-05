@@ -911,27 +911,17 @@ function InventoryModal({ restaurants, categories, products, currentUser, onClos
   function startCount() {
     if(!restId || !catId) return;
     const prods = products.filter(p => p.restaurantId===restId && p.category===catId);
-    // Group by name — show one line per product group with total stock
-    const groups = {};
-    prods.forEach(p => {
-      const k = (p.name||"").trim();
-      if (!groups[k]) groups[k] = { name:k, unit:p.unit||"", lots:[], categoryId:catId };
-      groups[k].lots.push(p);
-    });
-    const grouped = Object.values(groups).map(g => {
-      const totalExpected = g.lots.reduce((s,p)=>s+(parseFloat(p.quantity)||0),0);
-      const oldestLot = g.lots.sort((a,b)=>(a.elaboration||"").localeCompare(b.elaboration||""))[0];
-      return {
-        productId:  oldestLot.id, // reference to oldest lot
-        name:       g.name,
-        unit:       g.unit,
-        categoryId: catId,
-        expected:   totalExpected,
-        actual:     "",
-        lotCount:   g.lots.length,
-      };
-    });
-    setItems(grouped);
+    setItems(prods.map(p=>({
+      productId: p.id,
+      name:      p.name,
+      unit:      p.unit || "",
+      lot:       p.lot || "",
+      expiry:    p.expiry || "",
+      expected:  p.quantity ?? "",
+      minStock:  p.minStock ?? "",
+      maxStock:  p.maxStock ?? "",
+      actual:    "",
+    })));
     setStep("count");
   }
 
@@ -1061,11 +1051,16 @@ function InventoryModal({ restaurants, categories, products, currentUser, onClos
                         </div>
                         <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, alignItems:"flex-end"}}>
                           <div>
-                            <div style={{fontSize:11, color:C.text3, marginBottom:4}}>Stock total registrado</div>
+                            <div style={{fontSize:11, color:C.text3, marginBottom:4}}>Stock registrado</div>
                             <div style={{fontSize:16, fontWeight:700, color:C.text2, padding:"10px 12px", background:C.surface2, borderRadius:10}}>
                               {item.expected!==""?`${item.expected} ${item.unit}`:"—"}
                             </div>
-                            {item.lotCount>1&&<div style={{fontSize:10, color:C.text3, marginTop:4}}>{item.lotCount} lotes</div>}
+                            {(item.minStock||item.maxStock)&&(
+                              <div style={{fontSize:10, color:C.text3, marginTop:4, display:"flex", gap:8}}>
+                                {item.minStock&&<span>🔴 Mín: {item.minStock}</span>}
+                                {item.maxStock&&<span>🟢 Máx: {item.maxStock}</span>}
+                              </div>
+                            )}
                           </div>
                           <div>
                             <div style={{fontSize:11, color:C.accent, fontWeight:600, marginBottom:4}}>Cantidad real *</div>
@@ -1344,7 +1339,27 @@ function ProductModal({ product, restaurants, categories, catalog, currentUser, 
                 )}
               </div>
             </div>
-
+            {/* Stock min/max */}
+            <div style={{ background:C.surface2, borderRadius:12, padding:"12px 14px", border:`1px solid ${C.border}` }}>
+              <div style={{ fontSize:13, fontWeight:600, color:C.text2, marginBottom:10 }}>📊 Umbrales de stock (opcional)</div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <label style={LBL}>
+                  Stock mínimo
+                  <div style={{ position:"relative" }}>
+                    <input style={{ ...INP, paddingLeft:28 }} type="number" min="0" value={f.minStock} onChange={e=>setF({...f,minStock:e.target.value})} placeholder="0"/>
+                    <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", fontSize:14 }}>🔴</span>
+                  </div>
+                </label>
+                <label style={LBL}>
+                  Stock máximo
+                  <div style={{ position:"relative" }}>
+                    <input style={{ ...INP, paddingLeft:28 }} type="number" min="0" value={f.maxStock} onChange={e=>setF({...f,maxStock:e.target.value})} placeholder="0"/>
+                    <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", fontSize:14 }}>🟢</span>
+                  </div>
+                </label>
+              </div>
+              <div style={{ fontSize:11, color:C.text3, marginTop:8 }}>Si la cantidad cae por debajo del mínimo aparecerá una alerta en el Dashboard</div>
+            </div>
             <label style={LBL}>Notas / Alérgenos<textarea style={{ ...INP, resize:"vertical", height:60 }} value={f.notes} onChange={e=>setF({...f,notes:e.target.value})} placeholder="Alérgenos, ingredientes..."/></label>
             {/* Frozen toggle */}
             <button type="button" onClick={()=>setF({...f,frozen:!f.frozen})}
@@ -1524,7 +1539,6 @@ export default function App() {
   const [fSt,          setFSt]          = useState("all");
   const [toast,        setToast]        = useState(null); // {message,type}
   const [confirm,      setConfirm]      = useState(null); // {message,onConfirm,label}
-  const [lotsExpanded, setLotsExpanded] = useState({});   // {groupKey: bool}
 
   // Helper to show toast
   const showToast = (message, type="success") => setToast({message,type});
@@ -1541,7 +1555,6 @@ export default function App() {
   const [catalog,      setCatalog]      = useState([]);
   const [users,        setUsers]        = useState([]);
   const [inventories,  setInventories]  = useState([]);
-  const [thresholds,   setThresholds]   = useState([]); // [{id, name, restaurantId, category, minStock, maxStock, unit}]
 
   // Subscribe to all Firestore collections
   useEffect(() => {
@@ -1564,7 +1577,6 @@ export default function App() {
       onSnapshot(collection(db,"catalog"),                                s=>setCatalog(s.docs.map(d=>({id:d.id,...d.data()}))), ()=>{}),
       onSnapshot(query(collection(db,"users"),orderBy("name")),           s=>setUsers(s.docs.map(d=>({id:d.id,...d.data()}))), ()=>{}),
       onSnapshot(query(collection(db,"inventories"),orderBy("date","desc")),s=>setInventories(s.docs.map(d=>({id:d.id,...d.data()}))), ()=>{}),
-      onSnapshot(collection(db,"thresholds"), s=>setThresholds(s.docs.map(d=>({id:d.id,...d.data()}))), ()=>{}),
     ];
     setTimeout(()=>setLoading(false), 1200);
     return () => unsubs.forEach(u=>u());
@@ -1634,61 +1646,24 @@ export default function App() {
     catch { showToast("Error al eliminar","error"); }
   }
 
-  // Threshold key: name+restaurantId+category (URL-safe)
-  function thresholdKey(name, restaurantId, category) {
-    return (name+"|"+restaurantId+"|"+category).replace(/[^a-zA-Z0-9|_-]/g, "_").slice(0,200);
-  }
-  function getThreshold(name, restaurantId, category) {
-    return thresholds.find(t=>t.name===name&&t.restaurantId===restaurantId&&t.category===category)||null;
-  }
-  async function saveThreshold(name, restaurantId, category, unit, minStock, maxStock) {
-    const id = thresholdKey(name, restaurantId, category);
-    try {
-      await fbSet("thresholds", id, { name, restaurantId, category, unit:unit||"", minStock:minStock||"", maxStock:maxStock||"" });
-      showToast("Umbrales guardados ✓");
-    } catch { showToast("Error al guardar umbrales","error"); }
-  }
-  async function deleteThreshold(name, restaurantId, category) {
-    const id = thresholdKey(name, restaurantId, category);
-    try { await fbDel("thresholds", id); } catch {}
-  }
-
   async function saveInventory(inv) {
     try { await fbAdd("inventories", inv); } catch { showToast("Error al guardar el recuento","error"); return; }
-    // Distribute total counted qty across lots (FIFO — oldest first)
     const stockErrors = [];
     for (const item of inv.items) {
-      if (item.actual === "" || item.actual === null || item.actual === undefined) continue;
-      try {
-        const totalActual = parseFloat(item.actual);
-        if (isNaN(totalActual)) continue;
-        // Get all lots for this product group sorted oldest first
-        const groupLots = products
-          .filter(p => p.name===item.name && p.restaurantId===inv.restaurantId && p.category===item.categoryId)
-          .sort((a,b)=>(a.elaboration||"").localeCompare(b.elaboration||""));
-        if (groupLots.length === 0) {
-          // fallback: update by productId directly
-          await fbSet("products", item.productId, { quantity: totalActual });
-          continue;
-        }
-        let remaining = totalActual;
-        for (const lot of groupLots) {
-          if (remaining <= 0) {
-            // Delete empty lot
-            await fbDel("products", lot.id);
-          } else {
-            const lotQty = Math.min(remaining, parseFloat(lot.quantity)||remaining);
-            await fbSet("products", lot.id, { quantity: lotQty });
-            remaining -= lotQty;
+      if (item.actual !== "" && item.actual !== null && item.actual !== undefined) {
+        try {
+          const qty = parseFloat(item.actual);
+          if (!isNaN(qty)) {
+            await fbSet("products", item.productId, { quantity: qty });
           }
+        } catch(e) {
+          console.error("Error updating stock for", item.name, e);
+          stockErrors.push(item.name);
         }
-      } catch(e) {
-        console.error("Error updating stock for", item.name, e);
-        stockErrors.push(item.name);
       }
     }
     if (stockErrors.length > 0) {
-      showToast(`Errores al actualizar: ${stockErrors.join(", ")}`, "warning");
+      showToast(`Stock guardado con errores en: ${stockErrors.join(", ")}`, "warning");
     }
     const rest = restaurants.find(r=>r.id===inv.restaurantId);
     const cat  = cats.find(c=>c.id===inv.categoryId);
@@ -1738,51 +1713,16 @@ export default function App() {
   const umap    = Object.fromEntries(users.map(u=>[u.id,u]));
   const pmap    = Object.fromEntries(products.map(p=>[p.id,p]));
   const rmap    = Object.fromEntries(restaurants.map(r=>[r.id,r]));
-
-  // Group products by name+restaurantId+category
-  const groupedProducts = (() => {
-    const groups = {};
-    products.forEach(p => {
-      const key = `${(p.name||"").trim()}|${p.restaurantId||""}|${p.category||""}`;
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(p);
-    });
-    // Sort lots within each group oldest first
-    Object.values(groups).forEach(g => g.sort((a,b)=>(a.elaboration||"").localeCompare(b.elaboration||"")));
-    return groups;
-  })();
-
-  // For each group compute totalStock and attach threshold
-  const productGroups = Object.entries(groupedProducts).map(([key, lots]) => {
-    const first = lots[0];
-    const totalStock = lots.reduce((sum, p) => {
-      const q = parseFloat(p.quantity);
-      return sum + (isNaN(q) ? 0 : q);
-    }, 0);
-    const thresh = thresholds.find(t=>t.name===first.name&&t.restaurantId===first.restaurantId&&t.category===first.category)||null;
-    return { key, lots, first, totalStock, thresh };
-  });
   const expired = products.filter(p=>isExp(p.expiry));
   const near    = products.filter(p=>isNear(p.expiry));
   const curNav  = NAVS.find(n=>n.id===tab);
 
-  const filteredGroups = productGroups.filter(({first, lots, totalStock, thresh}) => {
-    const ms = !search ||
-      first.name.toLowerCase().includes(search.toLowerCase()) ||
-      lots.some(p=>p.lot?.toLowerCase().includes(search.toLowerCase()));
-    const mr = fRest==="all" || first.restaurantId===fRest;
-    const mc = fCat==="all" || first.category===fCat;
-    const hasExpired = lots.some(p=>isExp(p.expiry));
-    const hasNear    = lots.some(p=>isNear(p.expiry));
-    const hasFrozen  = lots.some(p=>p.frozen);
-    const isLow      = thresh && thresh.minStock!=="" && totalStock < parseFloat(thresh.minStock||0);
-    const mst = fSt==="all"
-      || (fSt==="expired" && hasExpired)
-      || (fSt==="near"    && hasNear)
-      || (fSt==="ok"      && !hasExpired && !hasNear)
-      || (fSt==="frozen"  && hasFrozen)
-      || (fSt==="low"     && isLow);
-    return ms && mr && mc && mst;
+  const filtered = products.filter(p=>{
+    const ms=!search||p.name.toLowerCase().includes(search.toLowerCase())||p.lot?.toLowerCase().includes(search.toLowerCase());
+    const mr=fRest==="all"||p.restaurantId===fRest;
+    const mc=fCat==="all"||p.category===fCat;
+    const mst=fSt==="all"||(fSt==="expired"&&isExp(p.expiry))||(fSt==="near"&&isNear(p.expiry))||(fSt==="ok"&&!isExp(p.expiry)&&!isNear(p.expiry))||(fSt==="frozen"&&p.frozen)||(fSt==="low"&&(()=>{ try { return stockLevel(p)==="low"; } catch { return false; } })());
+    return ms&&mr&&mc&&mst;
   });
 
   // ── Loading / User select ────────────────────────────────────────────────────
@@ -1847,7 +1787,7 @@ export default function App() {
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <span style={{ fontSize:20 }}>{curNav?.icon}</span>
           <span style={{ fontWeight:700, fontSize:17, color:C.text }}>{curNav?.l}</span>
-          {tab==="products"&&productGroups.length>0&&<span style={bdg("neutral")}>{productGroups.length}</span>}
+          {tab==="products"&&products.length>0&&<span style={bdg("neutral")}>{products.length}</span>}
           {tab==="restaurants"&&<span style={bdg("blue")}>{restaurants.length}</span>}
         </div>
         {/* Context action button */}
@@ -1882,27 +1822,22 @@ export default function App() {
 
             {/* Stock low alerts */}
             {(()=>{
-              const lowStock = productGroups.filter(({totalStock, thresh}) => {
-                try {
-                  const min = parseFloat(thresh?.minStock||"");
-                  return !isNaN(min) && min>0 && totalStock < min;
-                } catch { return false; }
-              });
+              const lowStock = products.filter(p=>{ try { return stockLevel(p)==="low"; } catch { return false; } });
               if(lowStock.length===0) return null;
               return (
                 <div style={{ background:C.redBg, borderRadius:16, padding:"16px 18px", border:`1px solid ${C.red}33` }}>
                   <div style={{ fontWeight:800, fontSize:15, color:C.red, marginBottom:10 }}>
                     🔴 {lowStock.length} producto{lowStock.length!==1?"s":""} por debajo del stock mínimo
                   </div>
-                  {lowStock.slice(0,5).map(({first, totalStock, thresh})=>{
-                    const rest=rmap[first.restaurantId];
+                  {lowStock.slice(0,5).map(p=>{
+                    const rest=restaurants.find(r=>r.id===p.restaurantId);
                     return(
-                      <div key={first.name+first.restaurantId} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 0", borderBottom:`1px solid ${C.red}22` }}>
+                      <div key={p.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 0", borderBottom:`1px solid ${C.red}22` }}>
                         <div>
-                          <div style={{ fontWeight:600, fontSize:14, color:C.text }}>{first.name}</div>
-                          <div style={{ fontSize:12, color:C.text2, marginTop:2 }}>{rest?.name} · Total: {totalStock} {first.unit} / Mín: {thresh?.minStock} {first.unit}</div>
+                          <div style={{ fontWeight:600, fontSize:14, color:C.text }}>{p.name}</div>
+                          <div style={{ fontSize:12, color:C.text2, marginTop:2 }}>{rest?.name} · Actual: {p.quantity} {p.unit} / Mín: {p.minStock} {p.unit}</div>
                         </div>
-                        <div style={{ fontWeight:800, fontSize:13, color:C.red }}>{totalStock}/{thresh?.minStock}</div>
+                        <div style={{ fontWeight:800, fontSize:13, color:C.red }}>{p.quantity}/{p.minStock}</div>
                       </div>
                     );
                   })}
@@ -2078,91 +2013,68 @@ export default function App() {
               ))}
             </div>
 
-            {/* Product list — grouped by name+local+category */}
-            {filteredGroups.length===0
+            {/* Product list */}
+            {filtered.length===0
               ?<div style={{ textAlign:"center", padding:"60px 0", color:C.text3 }}>
                 <div style={{ fontSize:48, marginBottom:10 }}>📦</div>
                 <div style={{ fontWeight:600, fontSize:16, color:C.text2 }}>Sin productos</div>
                 <div style={{ fontSize:13, marginTop:4 }}>Pulsa + Producto para empezar</div>
               </div>
               :<div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                {filteredGroups.map(({key, lots, first, totalStock, thresh})=>{
+                {filtered.map(p=>{
                   try {
-                    const rest = rmap[first.restaurantId];
-                    const cat  = cmap[first.category];
-                    const hasExpired = lots.some(p=>isExp(p.expiry));
-                    const hasNear    = lots.some(p=>isNear(p.expiry));
-                    const hasFrozen  = lots.some(p=>p.frozen);
-                    const minS = parseFloat(thresh?.minStock||"");
-                    const isLow = !isNaN(minS) && minS>0 && totalStock < minS;
-                    const stockCol = isLow ? C.red : C.green;
-                    const stockIcon = isLow ? "🔴" : "🟢";
-                    const unit = first.unit||"";
-                    const [expanded, setExpanded] = [lotsExpanded[key], (v)=>setLotsExpanded(e=>({...e,[key]:v}))];
-                    return (
-                      <div key={key} style={{ background:C.surface, borderRadius:16, border:`1.5px solid ${hasExpired?C.red+"55":hasNear?C.amber+"55":isLow?C.red+"33":C.border}`, overflow:"hidden", boxShadow:"0 1px 4px rgba(0,0,0,.04)" }}>
-                        {/* Group header */}
-                        <div style={{ padding:"14px 16px" }}>
-                          <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
-                            <div style={{ width:48, height:48, background:hasExpired?C.redBg:hasNear?C.amberBg:hasFrozen?"#E0F7FF":C.surface2, borderRadius:13, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, flexShrink:0, position:"relative" }}>
-                              {cat?.icon||"📦"}
-                              {hasFrozen&&<span style={{ position:"absolute", bottom:-2, right:-2, fontSize:14 }}>❄️</span>}
-                            </div>
-                            <div style={{ flex:1, minWidth:0 }}>
-                              <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginBottom:4 }}>
-                                <span style={{ fontWeight:700, fontSize:16, color:C.text }}>{first.name}</span>
-                                {hasExpired&&<span style={{ background:C.redBg, color:C.red, borderRadius:8, padding:"2px 8px", fontSize:11, fontWeight:700 }}>⚠️ Caducado</span>}
-                                {!hasExpired&&hasNear&&<span style={{ background:C.amberBg, color:C.amber, borderRadius:8, padding:"2px 8px", fontSize:11, fontWeight:700 }}>⏱ Caduca pronto</span>}
-                                {hasFrozen&&<span style={{ background:"#E0F7FF", color:"#0369A1", borderRadius:8, padding:"2px 8px", fontSize:11, fontWeight:700 }}>❄️ Congelado</span>}
-                              </div>
-                              <div style={{ fontSize:13, color:C.text2 }}>🏠 {rest?.name} · {cat?.label}</div>
-                              <div style={{ display:"flex", alignItems:"center", gap:12, marginTop:6, fontSize:13 }}>
-                                <span style={{ color:stockCol, fontWeight:700 }}>{stockIcon} {totalStock} {unit} total</span>
-                                {thresh?.minStock!==""&&<span style={{ color:C.text3, fontSize:12 }}>mín {thresh.minStock} {unit}</span>}
-                                <span style={{ color:C.text3, fontSize:12 }}>{lots.length} lote{lots.length!==1?"s":""}</span>
-                              </div>
-                            </div>
-                            <button onClick={()=>setExpanded(!expanded)}
-                              style={{ background:"none", border:"none", cursor:"pointer", color:C.text3, fontSize:20, padding:"4px", flexShrink:0 }}>
-                              {expanded?"▲":"▼"}
-                            </button>
+                  const rest=rmap[p.restaurantId], cat=cmap[p.category], creator=umap[p.createdBy];
+                  const expired_p = isExp(p.expiry), near_p = isNear(p.expiry);
+                  return(
+                    <div key={p.id} style={{ background:C.surface, borderRadius:16, border:`1.5px solid ${expired_p?C.red+"55":near_p?C.amber+"55":C.border}`, overflow:"hidden", boxShadow:"0 1px 4px rgba(0,0,0,.04)" }}>
+                      {/* Product main row */}
+                      <div style={{ padding:"14px 16px" }}>
+                        <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
+                          <div style={{ width:48, height:48, background:expired_p?C.redBg:near_p?C.amberBg:(p.frozen===true)?"#E0F7FF":C.surface2, borderRadius:13, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, flexShrink:0, position:"relative" }}>
+                            {cat?.icon||"📦"}
+                            {p.frozen&&<span style={{ position:"absolute", bottom:-2, right:-2, fontSize:14 }}>❄️</span>}
                           </div>
-                          {/* Lots detail — expandable */}
-                          {expanded&&(
-                            <div style={{ marginTop:12, borderTop:`1px solid ${C.border}`, paddingTop:10, display:"flex", flexDirection:"column", gap:8 }}>
-                              {lots.map(p=>{
-                                const expired_p=isExp(p.expiry), near_p=isNear(p.expiry);
-                                return (
-                                  <div key={p.id} style={{ display:"flex", alignItems:"center", gap:10, background:expired_p?C.redBg:near_p?C.amberBg:C.surface2, borderRadius:10, padding:"10px 12px" }}>
-                                    <div style={{ flex:1, minWidth:0 }}>
-                                      <div style={{ fontSize:13, color:C.text, fontWeight:600 }}>
-                                        {p.lot?`Lote: ${p.lot}`:"Sin lote"}
-                                        {p.frozen&&" ❄️"}
-                                      </div>
-                                      <div style={{ fontSize:12, color:C.text3, marginTop:2, display:"flex", gap:10 }}>
-                                        {p.elaboration&&<span>📅 {fmt(p.elaboration)}</span>}
-                                        {p.expiry&&<span style={{ color:expired_p?C.red:near_p?C.amber:C.text3 }}>⏱ {fmt(p.expiry)}</span>}
-                                      </div>
-                                    </div>
-                                    <div style={{ fontWeight:700, fontSize:14, color:C.text, flexShrink:0 }}>{p.quantity} {unit}</div>
-                                    {can(currentUser,"products.edit")&&<button onClick={()=>{setSel(p);setModal("product");}} style={{ ...B("ghost"), padding:"6px 10px", fontSize:12 }}>✏️</button>}
-                                    {can(currentUser,"products.delete")&&<button onClick={()=>showConfirm(`¿Eliminar lote "${p.lot||p.name}"?`,()=>deleteProduct(p.id))} style={{ background:"none", border:"none", cursor:"pointer", color:C.red, fontSize:16, padding:"4px" }}>🗑</button>}
-                                  </div>
-                                );
-                              })}
-                              {can(currentUser,"products.create")&&(
-                                <button onClick={()=>{setSel(null);setModal("product");}}
-                                  style={{ ...B("ghost"), fontSize:13, padding:"8px", border:`1px dashed ${C.border2}` }}>
-                                  + Añadir lote de {first.name}
-                                </button>
-                              )}
-                              {can(currentUser,"products")&&<button onClick={()=>{setSel(first);setModal("label");}} style={{ ...B("ghost"), fontSize:13, padding:"8px" }}>🏷 Imprimir etiqueta</button>}
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginBottom:4 }}>
+                              <span style={{ fontWeight:700, fontSize:16, color:C.text }}>{p.name}</span>
+                              <StatusBadge expiry={p.expiry}/>
+                              {p.frozen&&<span style={{ background:"#E0F7FF", color:"#0369A1", border:"1px solid #38BDF833", borderRadius:8, padding:"2px 8px", fontSize:11, fontWeight:700 }}>❄️ Congelado</span>}
                             </div>
-                          )}
+                            <div style={{ fontSize:13, color:C.text2 }}>🏠 {rest?.name}</div>
+                            <div style={{ display:"flex", flexWrap:"wrap", gap:"4px 12px", marginTop:6, fontSize:12, color:C.text3 }}>
+                              {p.elaboration&&<span>📅 Elab: {fmt(p.elaboration)}</span>}
+                              {p.expiry&&<span style={{ color:expired_p?C.red:near_p?C.amber:C.text3 }}>⏱ Cad: {fmt(p.expiry)}</span>}
+                              {(p.quantity!=null&&p.quantity!=="")&&(()=>{
+                                try {
+                                  const level=stockLevel(p)||"ok";
+                                  const col={"low":C.red,"ok":C.green,"unknown":C.text3}[level]||C.text3;
+                                  const icon={"low":"🔴","ok":"🟢","unknown":"📊"}[level]||"📊";
+                                  return <span style={{ color:col, fontWeight:700 }}>{icon} {p.quantity} {p.unit||""}{(p.minStock&&p.minStock!=="")?` / mín ${p.minStock}`:""}</span>;
+                                } catch { return <span>📊 {p.quantity} {p.unit||""}</span>; }
+                              })()}
+                              {p.lot&&<span>🔢 {p.lot}</span>}
+                            </div>
+                            {creator&&<div style={{ fontSize:11, color:C.text3, marginTop:4 }}>✍️ {creator.name}</div>}
+                          </div>
                         </div>
                       </div>
-                    );
-                  } catch(e) { console.error("Group render error:", key, e); return null; }
+                      {/* Action bar */}
+                      <div style={{ display:"flex", borderTop:`1px solid ${C.border}`, background:C.surface2 }}>
+                        {[
+                          {icon:"🏷", label:"Etiqueta", action:()=>{setSel(p);setModal("label");}, perm:"products"},
+                          {icon:"✏️", label:"Editar",   action:()=>{setSel(p);setModal("product");}, perm:"products.edit"},
+                          {icon:"🗑", label:"Borrar",   action:()=>showConfirm(`¿Eliminar "${p.name}"?`,()=>deleteProduct(p.id)), red:true, perm:"products.delete"},
+                        ].filter(a=>can(currentUser,a.perm)).map(a=>(
+                          <button key={a.label} onClick={a.action}
+                            style={{ flex:1, padding:"12px 4px", border:"none", background:"transparent", cursor:"pointer", fontSize:12, color:a.red?C.red:C.text2, fontWeight:600, display:"flex", flexDirection:"column", alignItems:"center", gap:3, borderRight:`1px solid ${C.border}` }}>
+                            <span style={{ fontSize:18 }}>{a.icon}</span>
+                            <span>{a.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                  } catch(e) { console.error("Product render error:", p?.id, e); return null; }
                 })}
               </div>
             }
@@ -2413,19 +2325,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Thresholds */}
-            {can(currentUser,"settings")&&(
-              <ThresholdsSettings
-                productGroups={productGroups}
-                restaurants={restaurants}
-                categories={cats}
-                thresholds={thresholds}
-                onSave={saveThreshold}
-                cmap={cmap}
-                rmap={rmap}
-              />
-            )}
-
             {/* Export */}
             <div style={{ background:C.surface, borderRadius:12, border:`1px solid ${C.border}`, padding:16 }}>
               <div style={{ fontWeight:700, fontSize:14, marginBottom:6 }}>📊 Exportar datos</div>
@@ -2447,7 +2346,7 @@ export default function App() {
       {modal==="transfer"&&<TransferModal products={products} restaurants={restaurants} currentUser={currentUser} onClose={()=>setModal(null)} onSave={saveTransfer}/>}
       {toast&&<Toast message={toast.message} type={toast.type} onDone={()=>setToast(null)}/>}
       {confirm&&<ConfirmDialog message={confirm.message} confirmLabel={confirm.label} onConfirm={()=>{confirm.onConfirm();setConfirm(null);}} onCancel={()=>setConfirm(null)}/>}
-      {modal==="inventory"&&<InventoryModal restaurants={restaurants} categories={cats} products={products} thresholds={thresholds} currentUser={currentUser} onClose={()=>setModal(null)} onSave={saveInventory}/>}
+      {modal==="inventory"&&<InventoryModal restaurants={restaurants} categories={cats} products={products} currentUser={currentUser} onClose={()=>setModal(null)} onSave={saveInventory}/>}
       {modal==="scanner"&&<ScannerModal onClose={()=>setModal(null)} products={products} restaurants={restaurants} users={users} currentUser={currentUser} onSaveTransfer={saveTransfer}/>}
     </div>
   );
@@ -2616,96 +2515,6 @@ function CatalogModal({ item, categories, onClose, onSave }) {
             {isNew ? "Crear plantilla" : "Guardar cambios"}
           </button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Thresholds Settings Component ─────────────────────────────────────────────
-function ThresholdsSettings({ productGroups, thresholds, onSave, cmap, rmap }) {
-  const [editing, setEditing] = useState(null); // key of group being edited
-  const [form, setForm]       = useState({ minStock:"", maxStock:"" });
-
-  function startEdit(group) {
-    const { first, thresh } = group;
-    const key = first.name+"|"+first.restaurantId+"|"+first.category;
-    setEditing(key);
-    setForm({ minStock: thresh?.minStock||"", maxStock: thresh?.maxStock||"" });
-  }
-
-  async function save(group) {
-    const { first } = group;
-    await onSave(first.name, first.restaurantId, first.category, first.unit||"", form.minStock, form.maxStock);
-    setEditing(null);
-  }
-
-  if (productGroups.length === 0) return null;
-
-  return (
-    <div style={{ background:C.surface, borderRadius:14, border:`1px solid ${C.border}`, overflow:"hidden" }}>
-      <div style={{ background:C.dark, padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-        <div>
-          <div style={{ fontWeight:800, fontSize:14, color:"#fff" }}>📊 Umbrales de stock</div>
-          <div style={{ fontSize:11, color:C.text3, marginTop:2 }}>Stock mínimo y máximo por producto y local</div>
-        </div>
-      </div>
-      <div style={{ display:"flex", flexDirection:"column" }}>
-        {productGroups.map(group => {
-          const { first, totalStock, thresh } = group;
-          const key = first.name+"|"+first.restaurantId+"|"+first.category;
-          const rest = rmap[first.restaurantId];
-          const cat  = cmap[first.category];
-          const isEdit = editing===key;
-          const minS = parseFloat(thresh?.minStock||"");
-          const isLow = !isNaN(minS) && minS>0 && totalStock < minS;
-          return (
-            <div key={key} style={{ padding:"12px 16px", borderBottom:`1px solid ${C.border}` }}>
-              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:isEdit?10:0 }}>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontWeight:600, fontSize:14, color:C.text }}>{first.name}</div>
-                  <div style={{ fontSize:12, color:C.text3, marginTop:2 }}>
-                    {cat?.icon} {cat?.label} · 🏠 {rest?.name}
-                  </div>
-                  {!isEdit&&(
-                    <div style={{ fontSize:12, marginTop:4, display:"flex", gap:10 }}>
-                      <span style={{ color:isLow?C.red:C.text3 }}>
-                        Stock: <strong>{totalStock} {first.unit||""}</strong>
-                      </span>
-                      {thresh?.minStock!==""&&<span style={{ color:C.text3 }}>🔴 Mín: {thresh.minStock}</span>}
-                      {thresh?.maxStock!==""&&<span style={{ color:C.text3 }}>🟢 Máx: {thresh.maxStock}</span>}
-                      {!thresh&&<span style={{ color:C.text3, fontStyle:"italic" }}>Sin umbrales</span>}
-                    </div>
-                  )}
-                </div>
-                {!isEdit&&(
-                  <button onClick={()=>startEdit(group)} style={{ ...B("ghost"), fontSize:13, padding:"6px 12px", flexShrink:0 }}>
-                    ✏️ Editar
-                  </button>
-                )}
-              </div>
-              {isEdit&&(
-                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-                    <label style={LBL}>
-                      🔴 Stock mínimo ({first.unit||"uds"})
-                      <input style={INP} type="number" min="0" value={form.minStock}
-                        onChange={e=>setForm(f=>({...f,minStock:e.target.value}))} placeholder="0"/>
-                    </label>
-                    <label style={LBL}>
-                      🟢 Stock máximo ({first.unit||"uds"})
-                      <input style={INP} type="number" min="0" value={form.maxStock}
-                        onChange={e=>setForm(f=>({...f,maxStock:e.target.value}))} placeholder="0"/>
-                    </label>
-                  </div>
-                  <div style={{ display:"flex", gap:8 }}>
-                    <button onClick={()=>setEditing(null)} style={{ ...B("ghost"), flex:1 }}>Cancelar</button>
-                    <button onClick={()=>save(group)} style={{ ...B("primary"), flex:1 }}>Guardar umbrales</button>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
       </div>
     </div>
   );
