@@ -2520,6 +2520,35 @@ function CatalogModal({ item, categories, onClose, onSave }) {
   );
 }
 
+// ── Confirm Dialog ────────────────────────────────────────────────────────────
+function ConfirmDialog({ message, onConfirm, onCancel, confirmLabel="Sí, eliminar" }) {
+  return (
+    <div style={OVR} onClick={onCancel}>
+      <div style={{ ...MDL, maxWidth:320, textAlign:"center" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ fontSize:36, marginBottom:12 }}>⚠️</div>
+        <div style={{ fontWeight:700, fontSize:15, color:C.text, marginBottom:20 }}>{message}</div>
+        <div style={{ display:"flex", gap:10 }}>
+          <button onClick={onCancel} style={{ ...B("ghost"), flex:1, padding:"13px" }}>Cancelar</button>
+          <button onClick={onConfirm} style={{ ...B("red"), flex:1, padding:"13px" }}>{confirmLabel}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Toast notification ────────────────────────────────────────────────────────
+function Toast({ message, type="success", onDone }) {
+  useEffect(() => { const t = setTimeout(onDone, 2500); return ()=>clearTimeout(t); }, []);
+  const bg = type==="error"?C.redBg:type==="warning"?C.amberBg:C.greenBg;
+  const co = type==="error"?C.red:type==="warning"?C.amber:C.green;
+  const ic = type==="error"?"✕":type==="warning"?"⚠️":"✓";
+  return (
+    <div style={{ position:"fixed", bottom:28, left:"50%", transform:"translateX(-50%)", zIndex:9999, background:bg, color:co, border:`1px solid ${co}44`, borderRadius:14, padding:"13px 20px", fontWeight:700, fontSize:14, boxShadow:"0 8px 24px rgba(0,0,0,.18)", display:"flex", alignItems:"center", gap:10, whiteSpace:"nowrap", maxWidth:"88vw" }}>
+      <span style={{ fontSize:18 }}>{ic}</span>{message}
+    </div>
+  );
+}
+
 // ── Category inline form ──────────────────────────────────────────────────────
 const EMOJI_LIST = ["🍲","🥣","🥩","🐟","🥦","🍝","🍰","🍞","🫙","🧆","🥤","📦","🥗","🫕","🍜","🥘","🍱","🥚","🧀","🥓","🌮","🍔","🍕","🥙","🧁","🍩","🍪","🎂","🍦","🥛","☕","🫖","🍵","🧃","🌿","🧄","🧅","🥕","🌽","🍅","🫑","🥑","🌾","🧂"];
 
