@@ -44,9 +44,6 @@ const DEFAULT_CATS = [
 ];
 
 
-// ── Master admin PIN (default 0000, editable by admin) ───────────────────────
-const DEFAULT_MASTER_PIN = "0000";
-
 // ── Roles & Permissions ──────────────────────────────────────────────────────
 const ROLES = {
   admin:    { label:"Admin",    icon:"👑", color:"#7C3AED" },
@@ -253,14 +250,11 @@ function exportXLS({ restaurants, products, transfers, history, categories, user
 async function generateQR(data) {
   return await QRCode.toDataURL(JSON.stringify(data), { width:120, margin:1, color:{ dark:"#1e293b", light:"#ffffff" } });
 }
-function UserSelectScreen({ users, onSelect, masterPin, onAdminAccess }) {
+function UserSelectScreen({ users, onSelect }) {
   const [selectedUser, setSelectedUser] = useState(null);
   const [pin, setPin]                   = useState("");
   const [error, setError]               = useState("");
   const [shake, setShake]               = useState(false);
-  // Master admin entry mode
-  const [showMaster, setShowMaster]     = useState(false);
-  const [masterEntry, setMasterEntry]   = useState("");
 
   function handleUserClick(u) {
     setSelectedUser(u); setPin(""); setError("");
@@ -273,13 +267,6 @@ function UserSelectScreen({ users, onSelect, masterPin, onAdminAccess }) {
     if (next.length === 4) setTimeout(() => checkPin(next), 150);
   }
 
-  function handleMasterDigit(d) {
-    if (masterEntry.length >= 4) return;
-    const next = masterEntry + d;
-    setMasterEntry(next);
-    if (next.length === 4) setTimeout(() => checkMaster(next), 150);
-  }
-
   function checkPin(p) {
     if (!selectedUser.pin || p === selectedUser.pin) {
       onSelect(selectedUser);
@@ -289,17 +276,7 @@ function UserSelectScreen({ users, onSelect, masterPin, onAdminAccess }) {
     }
   }
 
-  function checkMaster(p) {
-    if (p === masterPin) {
-      onAdminAccess();
-    } else {
-      setShake(true); setError("PIN incorrecto"); setMasterEntry("");
-      setTimeout(() => setShake(false), 600);
-    }
-  }
-
   function handleDelete() { setPin(p => p.slice(0,-1)); setError(""); }
-  function handleMasterDelete() { setMasterEntry(p => p.slice(0,-1)); setError(""); }
 
   const roleInfo = selectedUser ? ROLES[selectedUser.role] || ROLES.cocinero : null;
 
@@ -338,38 +315,11 @@ function UserSelectScreen({ users, onSelect, masterPin, onAdminAccess }) {
 
       <div style={{ width:"100%", maxWidth:360 }}>
 
-        {/* ── Master admin PIN ── */}
-        {showMaster && (
-          <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:20 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:12, width:"100%" }}>
-              <button onClick={()=>{setShowMaster(false);setMasterEntry("");setError("");}}
-                style={{ background:"rgba(255,255,255,.08)", border:"none", cursor:"pointer", color:"#fff", borderRadius:10, padding:"8px 12px", fontSize:13 }}>← Volver</button>
-              <div style={{ flex:1, textAlign:"center" }}>
-                <div style={{ fontWeight:700, fontSize:16, color:"#fff" }}>👑 Acceso Admin</div>
-                <div style={{ fontSize:12, color:C.text3 }}>Introduce el PIN maestro</div>
-              </div>
-              <div style={{ width:70 }}/>
-            </div>
-            <Numpad onDigit={handleMasterDigit} onDel={handleMasterDelete} value={masterEntry} err={error}/>
-          </div>
-        )}
-
         {/* ── User list ── */}
-        {!showMaster && !selectedUser && (
+        {!selectedUser && (
           <>
             <div style={{ fontSize:12, fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase", color:C.text3, marginBottom:14, textAlign:"center" }}>¿Quién eres?</div>
             <div style={{ display:"grid", gap:10 }}>
-              {/* Master admin button always visible */}
-              <button onClick={()=>{setShowMaster(true);setMasterEntry("");setError("");}}
-                style={{ background:"rgba(124,58,237,.2)", border:"1.5px solid rgba(124,58,237,.4)", borderRadius:16, padding:"16px 18px", cursor:"pointer", textAlign:"left", display:"flex", alignItems:"center", gap:14, WebkitTapHighlightColor:"transparent" }}>
-                <div style={{ width:46, height:46, borderRadius:"50%", background:"#7C3AED", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>👑</div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:700, fontSize:16, color:"#fff" }}>Admin</div>
-                  <div style={{ fontSize:12, color:C.text3, marginTop:3 }}>Acceso con PIN maestro</div>
-                </div>
-                <div style={{ color:C.text3, fontSize:18 }}>›</div>
-              </button>
-              {/* Regular users */}
               {users.map(u => {
                 const ri = ROLES[u.role] || ROLES.cocinero;
                 return (
@@ -391,7 +341,7 @@ function UserSelectScreen({ users, onSelect, masterPin, onAdminAccess }) {
         )}
 
         {/* ── User PIN entry ── */}
-        {!showMaster && selectedUser && (
+        {selectedUser && (
           <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:20 }}>
             <div style={{ display:"flex", alignItems:"center", gap:12, width:"100%" }}>
               <button onClick={()=>{setSelectedUser(null);setPin("");setError("");}}
@@ -1585,7 +1535,6 @@ export default function App() {
   const [catalog,      setCatalog]      = useState([]);
   const [users,        setUsers]        = useState([]);
   const [inventories,  setInventories]  = useState([]);
-  const [masterPin,    setMasterPin]    = useState(DEFAULT_MASTER_PIN);
 
   // Subscribe to all Firestore collections
   useEffect(() => {
@@ -1607,7 +1556,6 @@ export default function App() {
       onSnapshot(collection(db,"catalog"),                                s=>setCatalog(s.docs.map(d=>({id:d.id,...d.data()}))), ()=>{}),
       onSnapshot(query(collection(db,"users"),orderBy("name")),           s=>setUsers(s.docs.map(d=>({id:d.id,...d.data()}))), ()=>{}),
       onSnapshot(query(collection(db,"inventories"),orderBy("date","desc")),s=>setInventories(s.docs.map(d=>({id:d.id,...d.data()}))), ()=>{}),
-      onSnapshot(doc(db,"settings","app"), s=>{ if(s.exists()&&s.data().masterPin) setMasterPin(s.data().masterPin); }, ()=>{}),
     ];
     setTimeout(()=>setLoading(false), 1200);
     return () => unsubs.forEach(u=>u());
@@ -1647,7 +1595,6 @@ export default function App() {
 
   async function saveUser(u) { try { await fbSet("users", u.id, u); } catch { showToast("Error al guardar usuario","error"); throw new Error(); } }
   async function deleteUser(id) { try { await fbDel("users", id); showToast("Usuario eliminado"); } catch { showToast("Error al eliminar","error"); } }
-  async function saveMasterPin(pin) { try { await fbSet("settings","app",{masterPin:pin}); } catch { showToast("Error al guardar PIN","error"); throw new Error(); } }
 
   async function saveProduct(p) {
     try {
@@ -1743,7 +1690,7 @@ export default function App() {
   if (showUserSel || !currentUser) return (
     <>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}*{box-sizing:border-box;-webkit-font-smoothing:antialiased}body{margin:0;font-family:'DM Sans',system-ui,sans-serif}`}</style>
-      <UserSelectScreen users={users} onSelect={selectUser} masterPin={masterPin} onAdminAccess={()=>{ selectUser({id:"__master__",name:"Admin",role:"admin",pin:masterPin}); }}/>
+      <UserSelectScreen users={users} onSelect={selectUser} />
       {modal==="user"&&<UserModal user={null} restaurants={restaurants} onClose={()=>{setModal(null);if(!currentUser)setShowUserSel(true);}} onSave={async u=>{await saveUser(u);selectUser(u);}} onDelete={()=>{}}/>}
     </>
   );
@@ -2256,12 +2203,7 @@ export default function App() {
         {tab==="settings"&&(
           <div style={{ display:"grid", gap:14, maxWidth:600 }}>
 
-            {/* Master PIN — admin only */}
-            {can(currentUser,"settings")&&(
-              <MasterPinEditor masterPin={masterPin} onSave={saveMasterPin}/>
-            )}
-
-            {/* Usuarios */}
+{/* Usuarios */}
             <div style={{ background:C.surface, borderRadius:14, border:`1px solid ${C.border}`, overflow:"hidden" }}>
               <div style={{ background:C.dark, padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
                 <div><div style={{ fontWeight:800, fontSize:14, color:"#fff" }}>Usuarios</div><div style={{ fontSize:11, color:C.text3, marginTop:2 }}>{users.length} usuarios · Firman elaboraciones y transferencias</div></div>
@@ -2518,96 +2460,6 @@ function CatalogModal({ item, categories, onClose, onSave }) {
           </button>
         </div>
       </div>
-    </div>
-  );
-}
-
-// ── Master PIN editor ────────────────────────────────────────────────────────
-function MasterPinEditor({ masterPin, onSave }) {
-  const [editing, setEditing]   = useState(false);
-  const [newPin, setNewPin]     = useState("");
-  const [confirm, setConfirm]   = useState(false);
-  const [saved, setSaved]       = useState(false);
-
-  function handleDigit(d) {
-    if (newPin.length < 4) setNewPin(p => p+d);
-  }
-  function handleDel() { setNewPin(p => p.slice(0,-1)); }
-
-  async function handleSave() {
-    if (newPin.length !== 4) return;
-    await onSave(newPin);
-    setSaved(true);
-    setTimeout(() => { setSaved(false); setEditing(false); setNewPin(""); setConfirm(false); }, 1500);
-  }
-
-  return (
-    <div style={{ background:C.surface, borderRadius:14, border:`1px solid ${C.border}`, padding:18 }}>
-      <div style={{ fontWeight:700, fontSize:14, color:C.text, marginBottom:4 }}>👑 PIN maestro de Admin</div>
-      <div style={{ fontSize:12, color:C.text2, marginBottom:14 }}>
-        PIN actual: <strong>{masterPin}</strong> · Úsalo en la pantalla de inicio para entrar como Admin
-      </div>
-      {!editing ? (
-        <button onClick={()=>{setEditing(true);setNewPin("");}} style={{ ...B("ghost"), width:"100%", fontSize:14 }}>
-          ✏️ Cambiar PIN maestro
-        </button>
-      ) : saved ? (
-        <div style={{ background:C.greenBg, borderRadius:10, padding:"12px", textAlign:"center", fontWeight:700, color:C.green }}>✓ PIN actualizado</div>
-      ) : (
-        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-          <div style={{ textAlign:"center" }}>
-            <div style={{ fontSize:13, color:C.text2, marginBottom:10 }}>Nuevo PIN (4 dígitos)</div>
-            <div style={{ display:"flex", gap:12, justifyContent:"center", marginBottom:14 }}>
-              {[0,1,2,3].map(i=>(
-                <div key={i} style={{ width:16, height:16, borderRadius:"50%", background:newPin.length>i?C.accent:C.border, transition:"background .1s" }}/>
-              ))}
-            </div>
-          </div>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
-            {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=>(
-              <button key={i} type="button"
-                onClick={()=>d==="⌫"?handleDel():d!==""&&handleDigit(String(d))}
-                disabled={d===""}
-                style={{ height:52, borderRadius:10, border:`1.5px solid ${C.border}`, background:C.surface2, color:C.text, fontSize:d==="⌫"?18:20, fontWeight:600, cursor:d===""?"default":"pointer", opacity:d===""?0:1 }}>
-                {d}
-              </button>
-            ))}
-          </div>
-          <div style={{ display:"flex", gap:8 }}>
-            <button onClick={()=>{setEditing(false);setNewPin("");}} style={{ ...B("ghost"), flex:1 }}>Cancelar</button>
-            <button onClick={handleSave} disabled={newPin.length!==4} style={{ ...B("primary"), flex:1 }}>Guardar PIN</button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Confirm Dialog (replaces window.confirm for mobile) ──────────────────────
-function ConfirmDialog({ message, onConfirm, onCancel, confirmLabel="Sí, eliminar", confirmStyle="red" }) {
-  return (
-    <div style={OVR} onClick={onCancel}>
-      <div style={{ ...MDL, maxWidth:340, textAlign:"center" }} onClick={e=>e.stopPropagation()}>
-        <div style={{ fontSize:36, marginBottom:12 }}>⚠️</div>
-        <div style={{ fontWeight:700, fontSize:16, color:C.text, marginBottom:8 }}>{message}</div>
-        <div style={{ display:"flex", gap:10, marginTop:20 }}>
-          <button onClick={onCancel} style={{ ...B("ghost"), flex:1, fontSize:15, padding:"13px" }}>Cancelar</button>
-          <button onClick={onConfirm} style={{ ...B(confirmStyle), flex:1, fontSize:15, padding:"13px" }}>{confirmLabel}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Toast notification (replaces alert) ──────────────────────────────────────
-function Toast({ message, type="success", onDone }) {
-  useEffect(() => { const t = setTimeout(onDone, 2500); return ()=>clearTimeout(t); }, []);
-  const bg = type==="error"?C.redBg:type==="warning"?C.amberBg:C.greenBg;
-  const co = type==="error"?C.red:type==="warning"?C.amber:C.green;
-  const ic = type==="error"?"✕":type==="warning"?"⚠️":"✓";
-  return (
-    <div style={{ position:"fixed", bottom:24, left:"50%", transform:"translateX(-50%)", zIndex:2000, background:bg, color:co, border:`1px solid ${co}44`, borderRadius:14, padding:"13px 20px", fontWeight:700, fontSize:14, boxShadow:"0 8px 24px rgba(0,0,0,.15)", display:"flex", alignItems:"center", gap:10, whiteSpace:"nowrap", maxWidth:"90vw" }}>
-      <span style={{ fontSize:18 }}>{ic}</span>{message}
     </div>
   );
 }
