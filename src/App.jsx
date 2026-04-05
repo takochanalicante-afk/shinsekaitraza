@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { db } from "./firebase.js";
 import {
   collection, doc, onSnapshot, setDoc, deleteDoc,
-  addDoc, serverTimestamp, query, orderBy, getDoc
+  addDoc, serverTimestamp, query, orderBy
 } from "firebase/firestore";
 import * as XLSX from "xlsx";
 import jsQR from "jsqr";
@@ -10,6 +10,15 @@ import QRCode from "qrcode";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const today   = () => new Date().toISOString().slice(0, 10);
+const stockLevel = (p) => {
+  const qty = parseFloat(p.quantity);
+  const min = parseFloat(p.minStock);
+  const max = parseFloat(p.maxStock);
+  if (isNaN(qty) || p.quantity==="" || p.quantity===null) return "unknown";
+  if (!isNaN(min) && p.minStock!=="" && qty < min) return "low";
+  if (!isNaN(min) && p.minStock!=="" && qty < min*2) return "warning";
+  return "ok";
+};
 const addDays = (d, n) => { const dt = new Date(d); dt.setDate(dt.getDate() + n); return dt.toISOString().slice(0, 10); };
 const fmt     = d => { if (!d) return "—"; const [y, m, day] = d.split("-"); return `${day}/${m}/${y}`; };
 const nowTime = () => new Date().toTimeString().slice(0, 5);
@@ -157,7 +166,7 @@ function Picker({ label, value, onChange, options, placeholder }) {
         <button type="button" onClick={() => setOpen(v => !v)}
           style={{ ...INP, textAlign:"left", display:"flex", alignItems:"center", justifyContent:"space-between", cursor:"pointer", color:selected?C.text:C.text3 }}>
           <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>{selected ? selected.label : placeholder}</span>
-          <span style={{ marginLeft:8, flexShrink:0, color:"#94a3b8", fontSize:11 }}>{open?"▲":"▼"}</span>
+          <span style={{ marginLeft:8, flexShrink:0, color:C.text3, fontSize:11 }}>{open?"▲":"▼"}</span>
         </button>
         {open && (
           <div style={{ position:"absolute", top:"calc(100% + 4px)", left:0, right:0, background:C.surface, border:`1.5px solid ${C.border2}`, borderRadius:14, zIndex:50, maxHeight:240, overflowY:"auto", boxShadow:"0 12px 32px rgba(0,0,0,.15)" }}>
@@ -187,13 +196,19 @@ const COL = {
 };
 
 async function fbSet(col, id, data) {
-  await setDoc(doc(db, col, id), { ...data, updatedAt: serverTimestamp() }, { merge: true });
+  try {
+    await setDoc(doc(db, col, id), { ...data, updatedAt: serverTimestamp() }, { merge: true });
+  } catch(e) { console.error("fbSet error:", col, id, e); throw e; }
 }
 async function fbAdd(col, data) {
-  return await addDoc(collection(db, col), { ...data, createdAt: serverTimestamp() });
+  try {
+    return await addDoc(collection(db, col), { ...data, createdAt: serverTimestamp() });
+  } catch(e) { console.error("fbAdd error:", col, e); throw e; }
 }
 async function fbDel(col, id) {
-  await deleteDoc(doc(db, col, id));
+  try {
+    await deleteDoc(doc(db, col, id));
+  } catch(e) { console.error("fbDel error:", col, id, e); throw e; }
 }
 
 // ── Excel export ──────────────────────────────────────────────────────────────
@@ -206,7 +221,7 @@ function exportXLS({ restaurants, products, transfers, history, categories, user
   const ws0 = XLSX.utils.json_to_sheet(restaurants.map(r => ({ Nombre:r.name, "CIF/NIF":r.cif||"", Dirección:r.address||"", Ciudad:r.city||"", CP:r.zip||"", Teléfono:r.phone||"", Email:r.email||"", Responsable:r.manager||"" })));
   XLSX.utils.book_append_sheet(wb, ws0, "Locales");
 
-  const ws1 = XLSX.utils.json_to_sheet(products.map(p => ({ Nombre:p.name, Categoría:cmap[p.category]?.label||"—", Local:restaurants.find(r=>r.id===p.restaurantId)?.name||"—", Elaboración:fmt(p.elaboration), Caducidad:fmt(p.expiry), Estado:isExp(p.expiry)?"Caducado":isNear(p.expiry)?"Caduca pronto":"OK", Cantidad:p.quantity||"", Unidad:p.unit||"", Lote:p.lot||"" })));
+  const ws1 = XLSX.utils.json_to_sheet(products.map(p => ({ Nombre:p.name, Categoría:cmap[p.category]?.label||"—", Local:restaurants.find(r=>r.id===p.restaurantId)?.name||"—", Elaboración:fmt(p.elaboration), Caducidad:fmt(p.expiry), Estado:isExp(p.expiry)?"Caducado":isNear(p.expiry)?"Caduca pronto":"OK", Cantidad:p.quantity||"", Unidad:p.unit||"", Lote:p.lot||"", "Stock mínimo":p.minStock||"", "Stock máximo":p.maxStock||"" })));
   XLSX.utils.book_append_sheet(wb, ws1, "Productos");
 
   const ws2 = XLSX.utils.json_to_sheet(transfers.map(t => ({ Fecha:fmt(t.date), Hora:t.time||"—", Producto:products.find(p=>p.id===t.productId)?.name||"—", Origen:restaurants.find(r=>r.id===t.fromRestaurantId)?.name||"—", Destino:restaurants.find(r=>r.id===t.toRestaurantId)?.name||"—", Cantidad:t.qty||"", Firmado:umap[t.userId]?.name||"—", Nota:t.note||"" })));
@@ -514,17 +529,17 @@ function LabelModal({ product, restaurants, categories, users, onClose }) {
   return (
     <div style={OVR} onClick={onClose}>
       <div style={{ ...MDL, width:420 }} onClick={e => e.stopPropagation()}>
-        <div style={MHDR}><span style={{ fontSize:12, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:"#64748b" }}>Etiqueta de producto</span><button onClick={onClose} style={CBTN}>✕</button></div>
-        <div style={{ display:"flex", gap:14, alignItems:"flex-start", background:"#f8fafc", borderRadius:10, padding:14, border:"2px dashed #cbd5e1", margin:"14px 0", fontFamily:"'Courier New',monospace" }}>
+        <div style={MHDR}><span style={{ fontSize:12, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.text2 }}>Etiqueta de producto</span><button onClick={onClose} style={CBTN}>✕</button></div>
+        <div style={{ display:"flex", gap:14, alignItems:"flex-start", background:C.surface2, borderRadius:10, padding:14, border:"2px dashed #cbd5e1", margin:"14px 0", fontFamily:"'Courier New',monospace" }}>
           {qrUrl ? <img src={qrUrl} width={100} height={100} style={{ flexShrink:0 }}/> : <div style={{ width:100, height:100, background:"#f1f5f9", borderRadius:8, flexShrink:0 }}/>}
           <div style={{ flex:1, fontSize:11, color:"#1e293b" }}>
             <div style={{ fontSize:13, fontWeight:900, textTransform:"uppercase", letterSpacing:".05em", borderBottom:"2px solid #1e293b", paddingBottom:3, marginBottom:4 }}>{product.name}</div>
-            {cat && <div style={{ fontSize:9, color:"#64748b", marginBottom:4 }}>{cat.icon} {cat.label}</div>}
+            {cat && <div style={{ fontSize:9, color:C.text2, marginBottom:4 }}>{cat.icon} {cat.label}</div>}
             {[["Elaboración",fmt(product.elaboration)],["Caducidad",fmt(product.expiry)],product.quantity&&["Cantidad",`${product.quantity} ${product.unit}`],product.lot&&["Lote",product.lot]].filter(Boolean).map(([k,v]) => (
-              <div key={k} style={{ display:"flex", justifyContent:"space-between", marginBottom:2 }}><span style={{ color:"#64748b", fontWeight:700 }}>{k}:</span><span style={{ fontWeight:k==="Caducidad"?900:400 }}>{v}</span></div>
+              <div key={k} style={{ display:"flex", justifyContent:"space-between", marginBottom:2 }}><span style={{ color:C.text2, fontWeight:700 }}>{k}:</span><span style={{ fontWeight:k==="Caducidad"?900:400 }}>{v}</span></div>
             ))}
             <div style={{ marginTop:5, fontSize:9, background:"#1e293b", color:"#fff", borderRadius:3, padding:"2px 5px", display:"inline-block" }}>{rest?.name||"—"}</div>
-            {creator && <div style={{ marginTop:3, fontSize:9, color:"#94a3b8" }}>Por: {creator.name}</div>}
+            {creator && <div style={{ marginTop:3, fontSize:9, color:C.text3 }}>Por: {creator.name}</div>}
           </div>
         </div>
         <button onClick={print} style={{ ...B("primary"), width:"100%", fontSize:14 }}>🖨️ Imprimir etiqueta</button>
@@ -765,7 +780,7 @@ function ScannerModal({ onClose, products, restaurants, users, currentUser, onSa
         {/* Header */}
         <div style={{ padding:"14px 18px", borderBottom:"1px solid #f1f5f9", display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, background:"#fff", zIndex:10, borderRadius:"16px 16px 0 0" }}>
           <div>
-            <div style={{ fontSize:12, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:"#64748b" }}>
+            <div style={{ fontSize:12, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.text2 }}>
               {mode==="scan"||mode==="confirm" ? "Escanear QR" : mode==="multi" ? "Carga multiple" : "Completado"}
             </div>
             {mode==="multi"&&cart.length>0&&<div style={{ fontSize:11, color:"#f97316", fontWeight:700, marginTop:1 }}>{cart.length} producto{cart.length!==1?"s":""} en cola</div>}
@@ -792,7 +807,7 @@ function ScannerModal({ onClose, products, restaurants, users, currentUser, onSa
             <div style={{ textAlign:"center", padding:"20px 0", display:"flex", flexDirection:"column", alignItems:"center", gap:12 }}>
               <Spinner/>
               <div style={{ fontWeight:600, fontSize:14, color:"#1e293b" }}>Analizando imagen...</div>
-              <div style={{ fontSize:12, color:"#94a3b8" }}>Probando diferentes configuraciones</div>
+              <div style={{ fontSize:12, color:C.text3 }}>Probando diferentes configuraciones</div>
             </div>
           )}
 
@@ -815,7 +830,7 @@ function ScannerModal({ onClose, products, restaurants, users, currentUser, onSa
               <div onClick={()=>fileInputRef.current?.click()} style={scanBtnStyle}>
                 <div style={{ fontSize:56 }}>📷</div>
                 <div style={{ fontWeight:800, fontSize:18, color:"#f97316" }}>Abrir camara</div>
-                <div style={{ fontSize:12, color:"#94a3b8" }}>Toca para fotografiar la etiqueta</div>
+                <div style={{ fontSize:12, color:C.text3 }}>Toca para fotografiar la etiqueta</div>
               </div>
 
               {/* Gallery fallback */}
@@ -824,7 +839,7 @@ function ScannerModal({ onClose, products, restaurants, users, currentUser, onSa
                 🖼 Seleccionar de la galeria
               </button>
 
-              <div style={{ textAlign:"center", fontSize:11, color:"#94a3b8" }}>
+              <div style={{ textAlign:"center", fontSize:11, color:C.text3 }}>
                 El sistema realiza hasta 200 intentos de lectura por imagen
               </div>
             </div>
@@ -871,7 +886,7 @@ function ScannerModal({ onClose, products, restaurants, users, currentUser, onSa
                 <div style={{ fontSize:36 }}>📷</div>
                 <div style={{ textAlign:"left" }}>
                   <div style={{ fontWeight:700, fontSize:15, color:"#f97316" }}>Escanear siguiente producto</div>
-                  <div style={{ fontSize:11, color:"#64748b" }}>Toca para abrir la camara</div>
+                  <div style={{ fontSize:11, color:C.text2 }}>Toca para abrir la camara</div>
                 </div>
               </div>
 
@@ -883,14 +898,14 @@ function ScannerModal({ onClose, products, restaurants, users, currentUser, onSa
               )}
 
               {cart.length === 0
-                ? <div style={{ textAlign:"center", padding:"12px 0", color:"#94a3b8", fontSize:13 }}>Cola vacia — escanea el primer producto</div>
+                ? <div style={{ textAlign:"center", padding:"12px 0", color:C.text3, fontSize:13 }}>Cola vacia — escanea el primer producto</div>
                 : <>
                     <div style={{ fontWeight:700, fontSize:13, marginBottom:4 }}>Cola ({cart.length} productos)</div>
                     {cart.map(({product:p, qty}) => (
-                      <div key={p.id} style={{ background:"#f8fafc", borderRadius:9, padding:"9px 12px", border:"1px solid #e2e8f0", display:"flex", alignItems:"center", gap:10 }}>
+                      <div key={p.id} style={{ background:C.surface2, borderRadius:9, padding:"9px 12px", border:`1px solid ${C.border}`, display:"flex", alignItems:"center", gap:10 }}>
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ fontWeight:700, fontSize:13, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</div>
-                          <div style={{ fontSize:11, color:"#64748b" }}>{restaurants.find(r=>r.id===p.restaurantId)?.name||"—"}{p.quantity?` · ${p.quantity} ${p.unit||""}`:""}</div>
+                          <div style={{ fontSize:11, color:C.text2 }}>{restaurants.find(r=>r.id===p.restaurantId)?.name||"—"}{p.quantity?` · ${p.quantity} ${p.unit||""}`:""}</div>
                         </div>
                         <input style={{ ...INP, width:68, padding:"5px 7px", fontSize:12, textAlign:"center" }} type="number" min="0" placeholder="Cant." value={qty} onChange={e=>setCart(c=>c.map(i=>i.product.id===p.id?{...i,qty:e.target.value}:i))}/>
                         <button onClick={()=>setCart(c=>c.filter(i=>i.product.id!==p.id))} style={{ ...B("red"), padding:"5px 8px", fontSize:12, flexShrink:0 }}>x</button>
@@ -911,7 +926,7 @@ function ScannerModal({ onClose, products, restaurants, users, currentUser, onSa
             <div style={{ textAlign:"center", padding:"20px 0" }}>
               <div style={{ fontSize:52, marginBottom:10 }}>✅</div>
               <div style={{ fontWeight:800, fontSize:18, color:"#15803d", marginBottom:6 }}>Completado</div>
-              <div style={{ fontSize:13, color:"#64748b", marginBottom:20 }}>
+              <div style={{ fontSize:13, color:C.text2, marginBottom:20 }}>
                 {cart.length} producto{cart.length!==1?"s":""} transferido{cart.length!==1?"s":""} a{" "}
                 <strong>{restaurants.find(r=>r.id===destId)?.name}</strong>
               </div>
@@ -952,6 +967,8 @@ function InventoryModal({ restaurants, categories, products, currentUser, onClos
       lot:       p.lot || "",
       expiry:    p.expiry || "",
       expected:  p.quantity ?? "",
+      minStock:  p.minStock ?? "",
+      maxStock:  p.maxStock ?? "",
       actual:    "",
     })));
     setStep("count");
@@ -1087,6 +1104,12 @@ function InventoryModal({ restaurants, categories, products, currentUser, onClos
                             <div style={{fontSize:16, fontWeight:700, color:C.text2, padding:"10px 12px", background:C.surface2, borderRadius:10}}>
                               {item.expected!==""?`${item.expected} ${item.unit}`:"—"}
                             </div>
+                            {(item.minStock||item.maxStock)&&(
+                              <div style={{fontSize:10, color:C.text3, marginTop:4, display:"flex", gap:8}}>
+                                {item.minStock&&<span>🔴 Mín: {item.minStock}</span>}
+                                {item.maxStock&&<span>🟢 Máx: {item.maxStock}</span>}
+                              </div>
+                            )}
                           </div>
                           <div>
                             <div style={{fontSize:11, color:C.accent, fontWeight:600, marginBottom:4}}>Cantidad real *</div>
@@ -1197,7 +1220,7 @@ function RestaurantModal({ restaurant, onClose, onSave, onDelete, productCount=0
     <div style={OVR} onClick={onClose}>
       <div style={{ ...MDL, maxWidth:520, maxHeight:"92vh", overflowY:"auto" }} onClick={e=>e.stopPropagation()}>
         <div style={MHDR}>
-          <div><div style={{ fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:"#64748b" }}>{isNew?"Nuevo local":"Ficha del local"}</div>{!isNew&&<div style={{ fontWeight:800, fontSize:16, marginTop:2 }}>{f.name}</div>}</div>
+          <div><div style={{ fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.text2 }}>{isNew?"Nuevo local":"Ficha del local"}</div>{!isNew&&<div style={{ fontWeight:800, fontSize:16, marginTop:2 }}>{f.name}</div>}</div>
           <button onClick={onClose} style={CBTN}>✕</button>
         </div>
         <div style={{ marginTop:16, display:"flex", flexDirection:"column", gap:12 }}>
@@ -1222,7 +1245,7 @@ function RestaurantModal({ restaurant, onClose, onSave, onDelete, productCount=0
             </div>
           </div>
           <label style={LBL}>Notas<textarea style={{ ...INP, resize:"vertical", height:60 }} value={f.notes} onChange={set("notes")}/></label>
-          {!isNew&&<div style={{ background:"#f8fafc", borderRadius:8, padding:10, fontSize:12, color:"#64748b" }}>{productCount} productos registrados</div>}
+          {!isNew&&<div style={{ background:C.surface2, borderRadius:8, padding:10, fontSize:12, color:C.text2 }}>{productCount} productos registrados</div>}
           <div style={{ display:"flex", gap:8 }}>
             <button onClick={()=>{if(!f.name.trim())return;onSave({...f,id:f.id||uid()});onClose();}} style={{ ...B("primary"), flex:1 }} disabled={!f.name.trim()}>{isNew?"Crear local":"Guardar"}</button>
             {!isNew&&!confirmDel&&<button onClick={()=>setConfirmDel(true)} style={{ ...B("red"), flexShrink:0 }}>🗑</button>}
@@ -1239,7 +1262,7 @@ function ProductModal({ product, restaurants, categories, catalog, currentUser, 
   const isEdit = !!product;
   const [step, setStep] = useState(isEdit?"form":"pick");
   const [search, setSearch] = useState("");
-  const defaultForm = { name:"", category:categories[0]?.id||"otros", restaurantId:currentUser?.restaurantId||restaurants[0]?.id||"", elaboration:today(), expiry:addDays(today(),7), quantity:"", unit:"kg", lot:"", notes:"", frozen:false };
+  const defaultForm = { name:"", category:categories[0]?.id||"otros", restaurantId:currentUser?.restaurantId||restaurants[0]?.id||"", elaboration:today(), expiry:addDays(today(),7), quantity:"", unit:"kg", lot:"", notes:"", frozen:false, minStock:"", maxStock:"" };
   const [f, setF] = useState(product||defaultForm);
   const [catOpen, setCatOpen] = useState(false);
   const curCat = categories.find(c=>c.id===f.category);
@@ -1267,7 +1290,7 @@ function ProductModal({ product, restaurants, categories, catalog, currentUser, 
       <div style={{ ...MDL, width:500, maxHeight:"92vh", overflowY:"auto" }} onClick={e=>e.stopPropagation()}>
         <div style={MHDR}>
           <div>
-            <div style={{ fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:"#64748b" }}>
+            <div style={{ fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.text2 }}>
               {isEdit?"Editar producto":step==="pick"?"Nuevo producto — Plantilla":"Nuevo producto — Detalles"}
             </div>
             {step==="form"&&!isEdit&&f.name&&<div style={{ fontWeight:800, fontSize:15, marginTop:1 }}>{f.name}</div>}
@@ -1334,7 +1357,7 @@ function ProductModal({ product, restaurants, categories, catalog, currentUser, 
             <div>
               <div style={{ fontSize:12, fontWeight:600, color:"#475569", marginBottom:5 }}>Categoría</div>
               {!catOpen
-                ?<button onClick={()=>setCatOpen(true)} style={{ ...B("ghost"), width:"100%", textAlign:"left", display:"flex", alignItems:"center", gap:8 }}>{curCat?.icon||"📦"} {curCat?.label||"Seleccionar..."}<span style={{ marginLeft:"auto", color:"#94a3b8" }}>▾</span></button>
+                ?<button onClick={()=>setCatOpen(true)} style={{ ...B("ghost"), width:"100%", textAlign:"left", display:"flex", alignItems:"center", gap:8 }}>{curCat?.icon||"📦"} {curCat?.label||"Seleccionar..."}<span style={{ marginLeft:"auto", color:C.text3 }}>▾</span></button>
                 :<div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:5, maxHeight:220, overflowY:"auto" }}>{categories.map(c=><button key={c.id} onClick={()=>{setF({...f,category:c.id});setCatOpen(false);}} style={{ ...B(f.category===c.id?"primary":"ghost"), textAlign:"left", padding:"6px 9px", fontSize:12, display:"flex", alignItems:"center", gap:5 }}>{c.icon} {c.label}</button>)}</div>
               }
             </div>
@@ -1360,6 +1383,27 @@ function ProductModal({ product, restaurants, categories, catalog, currentUser, 
                   </div>
                 )}
               </div>
+            </div>
+            {/* Stock min/max */}
+            <div style={{ background:C.surface2, borderRadius:12, padding:"12px 14px", border:`1px solid ${C.border}` }}>
+              <div style={{ fontSize:13, fontWeight:600, color:C.text2, marginBottom:10 }}>📊 Umbrales de stock (opcional)</div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <label style={LBL}>
+                  Stock mínimo
+                  <div style={{ position:"relative" }}>
+                    <input style={{ ...INP, paddingLeft:28 }} type="number" min="0" value={f.minStock} onChange={e=>setF({...f,minStock:e.target.value})} placeholder="0"/>
+                    <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", fontSize:14 }}>🔴</span>
+                  </div>
+                </label>
+                <label style={LBL}>
+                  Stock máximo
+                  <div style={{ position:"relative" }}>
+                    <input style={{ ...INP, paddingLeft:28 }} type="number" min="0" value={f.maxStock} onChange={e=>setF({...f,maxStock:e.target.value})} placeholder="0"/>
+                    <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", fontSize:14 }}>🟢</span>
+                  </div>
+                </label>
+              </div>
+              <div style={{ fontSize:11, color:C.text3, marginTop:8 }}>Si la cantidad cae por debajo del mínimo aparecerá una alerta en el Dashboard</div>
             </div>
             <label style={LBL}>Notas / Alérgenos<textarea style={{ ...INP, resize:"vertical", height:60 }} value={f.notes} onChange={e=>setF({...f,notes:e.target.value})} placeholder="Alérgenos, ingredientes..."/></label>
             {/* Frozen toggle */}
@@ -1405,7 +1449,7 @@ function TransferModal({ products, restaurants, currentUser, onClose, onSave }) 
   return (
     <div style={OVR} onClick={onClose}>
       <div style={{ ...MDL, width:420 }} onClick={e=>e.stopPropagation()}>
-        <div style={MHDR}><span style={{ fontSize:12, fontWeight:700, textTransform:"uppercase", letterSpacing:".08em", color:"#64748b" }}>Nueva transferencia</span><button onClick={onClose} style={CBTN}>✕</button></div>
+        <div style={MHDR}><span style={{ fontSize:12, fontWeight:700, textTransform:"uppercase", letterSpacing:".08em", color:C.text2 }}>Nueva transferencia</span><button onClick={onClose} style={CBTN}>✕</button></div>
         <div style={{ marginTop:14, display:"flex", flexDirection:"column", gap:11 }}>
           <Picker label="Producto" value={f.productId} onChange={v=>setF({...f,productId:v,toRestaurantId:""})} options={productOptions} placeholder="Seleccionar producto..."/>
           {prod&&(
@@ -1427,7 +1471,7 @@ function TransferModal({ products, restaurants, currentUser, onClose, onSave }) 
           <Picker label="Destino" value={f.toRestaurantId} onChange={v=>setF({...f,toRestaurantId:v})} options={destOptions} placeholder={prod?"Seleccionar destino...":"Selecciona un producto primero"}/>
           <label style={LBL}>Cantidad<input style={INP} type="number" min="0" placeholder={hasStock?`Máx: ${prod.quantity} ${prod.unit||""}`:"Ej: 5"} value={f.qty} onChange={e=>setF({...f,qty:e.target.value})}/></label>
           <label style={LBL}>Nota (opcional)<input style={INP} value={f.note} onChange={e=>setF({...f,note:e.target.value})} placeholder="Observaciones..."/></label>
-          {currentUser&&<div style={{ background:"#f8fafc", borderRadius:8, padding:8, fontSize:12, color:"#64748b" }}>✍️ Firmado por: <strong>{currentUser.name}</strong></div>}
+          {currentUser&&<div style={{ background:C.surface2, borderRadius:8, padding:8, fontSize:12, color:C.text2 }}>✍️ Firmado por: <strong>{currentUser.name}</strong></div>}
           <button onClick={()=>{ if(!f.productId||!f.toRestaurantId)return; onSave({...f,fromRestaurantId:prod?.restaurantId,userId:currentUser?.id||"",date:today(),time:nowTime(),id:uid()}); onClose(); }} style={{ ...B("primary"), width:"100%" }} disabled={!f.productId||!f.toRestaurantId}>
             Registrar transferencia →
           </button>
@@ -1523,6 +1567,14 @@ export default function App() {
   const [fRest,        setFRest]        = useState("all");
   const [fCat,         setFCat]         = useState("all");
   const [fSt,          setFSt]          = useState("all");
+  const [toast,        setToast]        = useState(null); // {message,type}
+  const [confirm,      setConfirm]      = useState(null); // {message,onConfirm,label}
+
+  // Helper to show toast
+  const showToast = (message, type="success") => setToast({message,type});
+  // Helper to show confirm dialog
+  const showConfirm = (message, onConfirm, label="Sí, eliminar") =>
+    setConfirm({message, onConfirm, label});
 
   // Firebase data
   const [restaurants,  setRestaurants]  = useState([]);
@@ -1583,32 +1635,36 @@ export default function App() {
     products.filter(p=>p.restaurantId===id).forEach(p=>fbDel("products",p.id));
   }
 
-  async function saveCategory(c) { await fbSet("categories", c.id, c); }
+  async function saveCategory(c) { try { await fbSet("categories", c.id, c); } catch { showToast("Error al guardar categoría","error"); } }
   async function deleteCategory(id) {
     await fbDel("categories", id);
     const fallback = categories.find(c=>c.id!==id)?.id||"otros";
     products.filter(p=>p.category===id).forEach(p=>fbSet("products",p.id,{category:fallback}));
   }
 
-  async function saveCatalogItem(item) { await fbSet("catalog", item.id, item); }
-  async function deleteCatalogItem(id) { await fbDel("catalog", id); }
+  async function saveCatalogItem(item) { try { await fbSet("catalog", item.id, item); } catch { showToast("Error al guardar plantilla","error"); } }
+  async function deleteCatalogItem(id) { try { await fbDel("catalog", id); showToast("Plantilla eliminada"); } catch { showToast("Error al eliminar","error"); } }
 
-  async function saveUser(u) { await fbSet("users", u.id, u); }
-  async function deleteUser(id) { await fbDel("users", id); }
-  async function saveMasterPin(pin) { await fbSet("settings","app",{masterPin:pin}); }
+  async function saveUser(u) { try { await fbSet("users", u.id, u); } catch { showToast("Error al guardar usuario","error"); throw new Error(); } }
+  async function deleteUser(id) { try { await fbDel("users", id); showToast("Usuario eliminado"); } catch { showToast("Error al eliminar","error"); } }
+  async function saveMasterPin(pin) { try { await fbSet("settings","app",{masterPin:pin}); } catch { showToast("Error al guardar PIN","error"); throw new Error(); } }
 
   async function saveProduct(p) {
-    const isNew = !products.find(x=>x.id===p.id);
-    await fbSet("products", p.id, p);
-    const rest = restaurants.find(r=>r.id===p.restaurantId);
-    addHistEntry(isNew?"created":"edited", p.id, p.restaurantId, isNew?`Creado en ${rest?.name}`:`Editado: ${p.name}`, p.name);
+    try {
+      const isNew = !products.find(x=>x.id===p.id);
+      await fbSet("products", p.id, p);
+      const rest = rmap[p.restaurantId];
+      addHistEntry(isNew?"created":"edited", p.id, p.restaurantId, isNew?`Creado en ${rest?.name}`:`Editado: ${p.name}`, p.name);
+      showToast(isNew?"Producto creado":"Producto actualizado");
+    } catch { showToast("Error al guardar el producto","error"); }
   }
   async function deleteProduct(id) {
-    await fbDel("products", id);
+    try { await fbDel("products", id); showToast("Producto eliminado"); }
+    catch { showToast("Error al eliminar","error"); }
   }
 
   async function saveInventory(inv) {
-    await fbAdd("inventories", inv);
+    try { await fbAdd("inventories", inv); } catch { showToast("Error al guardar el recuento","error"); return; }
     for (const item of inv.items) {
       if (item.actual !== "" && item.actual !== null && item.actual !== undefined) {
         await fbSet("products", item.productId, { quantity: parseFloat(item.actual) });
@@ -1620,6 +1676,7 @@ export default function App() {
       `Recuento de ${cat?.label||"categoria"} en ${rest?.name||"—"} · ${inv.items.length} productos`,
       "Inventario"
     );
+    showToast("Recuento guardado");
   }
 
 
@@ -1633,7 +1690,7 @@ export default function App() {
     const remaining   = hasStock ? Math.max(0, originStock-qty) : null;
 
     // Save transfer record
-    await fbAdd("transfers", t);
+    try { await fbAdd("transfers", t); } catch { showToast("Error al guardar la transferencia","error"); return; }
 
     if (!p) return;
 
@@ -1652,12 +1709,15 @@ export default function App() {
 
     const detail = `De ${from?.name||"—"} → ${to?.name||"—"}${qty>0?` (${qty} ${p?.unit||""})`:""}${t.note?` · ${t.note}`:""}`;
     addHistEntry("transferred", t.productId, t.toRestaurantId, detail, p?.name);
+    showToast("Transferencia registrada");
   }
 
   // ── Derived state ────────────────────────────────────────────────────────────
   const cats    = categories.length ? categories : DEFAULT_CATS;
   const cmap    = Object.fromEntries(cats.map(c=>[c.id,c]));
   const umap    = Object.fromEntries(users.map(u=>[u.id,u]));
+  const pmap    = Object.fromEntries(products.map(p=>[p.id,p]));
+  const rmap    = Object.fromEntries(restaurants.map(r=>[r.id,r]));
   const expired = products.filter(p=>isExp(p.expiry));
   const near    = products.filter(p=>isNear(p.expiry));
   const curNav  = NAVS.find(n=>n.id===tab);
@@ -1666,7 +1726,7 @@ export default function App() {
     const ms=!search||p.name.toLowerCase().includes(search.toLowerCase())||p.lot?.toLowerCase().includes(search.toLowerCase());
     const mr=fRest==="all"||p.restaurantId===fRest;
     const mc=fCat==="all"||p.category===fCat;
-    const mst=fSt==="all"||(fSt==="expired"&&isExp(p.expiry))||(fSt==="near"&&isNear(p.expiry))||(fSt==="ok"&&!isExp(p.expiry)&&!isNear(p.expiry))||(fSt==="frozen"&&p.frozen);
+    const mst=fSt==="all"||(fSt==="expired"&&isExp(p.expiry))||(fSt==="near"&&isNear(p.expiry))||(fSt==="ok"&&!isExp(p.expiry)&&!isNear(p.expiry))||(fSt==="frozen"&&p.frozen)||(fSt==="low"&&stockLevel(p)==="low");
     return ms&&mr&&mc&&mst;
   });
 
@@ -1676,7 +1736,7 @@ export default function App() {
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
       <div style={{ width:48, height:48, background:"#f97316", borderRadius:12, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24 }}>⊛</div>
       <Spinner/>
-      <span style={{ color:"#64748b", fontSize:13 }}>Conectando con Firebase...</span>
+      <span style={{ color:C.text2, fontSize:13 }}>Conectando con Firebase...</span>
     </div>
   );
 
@@ -1765,6 +1825,32 @@ export default function App() {
               </div>
             )}
 
+            {/* Stock low alerts */}
+            {(()=>{
+              const lowStock = products.filter(p=>stockLevel(p)==="low");
+              if(lowStock.length===0) return null;
+              return (
+                <div style={{ background:C.redBg, borderRadius:16, padding:"16px 18px", border:`1px solid ${C.red}33` }}>
+                  <div style={{ fontWeight:800, fontSize:15, color:C.red, marginBottom:10 }}>
+                    🔴 {lowStock.length} producto{lowStock.length!==1?"s":""} por debajo del stock mínimo
+                  </div>
+                  {lowStock.slice(0,5).map(p=>{
+                    const rest=restaurants.find(r=>r.id===p.restaurantId);
+                    return(
+                      <div key={p.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 0", borderBottom:`1px solid ${C.red}22` }}>
+                        <div>
+                          <div style={{ fontWeight:600, fontSize:14, color:C.text }}>{p.name}</div>
+                          <div style={{ fontSize:12, color:C.text2, marginTop:2 }}>{rest?.name} · Actual: {p.quantity} {p.unit} / Mín: {p.minStock} {p.unit}</div>
+                        </div>
+                        <div style={{ fontWeight:800, fontSize:13, color:C.red }}>{p.quantity}/{p.minStock}</div>
+                      </div>
+                    );
+                  })}
+                  {lowStock.length>5&&<div style={{ fontSize:12, color:C.red, marginTop:8, textAlign:"center" }}>+{lowStock.length-5} más...</div>}
+                </div>
+              );
+            })()}
+
             {/* Key stats — 2x2 grid, big and clear */}
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
               {[
@@ -1813,7 +1899,7 @@ export default function App() {
                 </div>
                 <div style={{ padding:"0 18px" }}>
                   {transfers.slice(0,5).map(t=>{
-                    const p=products.find(x=>x.id===t.productId), from=restaurants.find(r=>r.id===t.fromRestaurantId), to=restaurants.find(r=>r.id===t.toRestaurantId), u=umap[t.userId];
+                    const p=pmap[t.productId], from=rmap[t.fromRestaurantId], to=rmap[t.toRestaurantId], u=umap[t.userId];
                     return(
                       <div key={t.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 0", borderBottom:`1px solid ${C.border}` }}>
                         <div style={{ width:40, height:40, background:C.surface2, borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>⇄</div>
@@ -1924,7 +2010,7 @@ export default function App() {
             </div>
             {/* Status + frozen filter chips */}
             <div style={{ display:"flex", gap:8, overflowX:"auto", paddingBottom:2 }}>
-              {[{v:"all",l:"Todos los estados"},{v:"ok",l:"✅ OK"},{v:"near",l:"⏱ Caduca pronto"},{v:"expired",l:"⚠️ Caducados"},{v:"frozen",l:"❄️ Congelados"}].map(s=>(
+              {[{v:"all",l:"Todos los estados"},{v:"ok",l:"✅ OK"},{v:"near",l:"⏱ Caduca pronto"},{v:"expired",l:"⚠️ Caducados"},{v:"frozen",l:"❄️ Congelados"},{v:"low",l:"🔴 Stock bajo"}].map(s=>(
                 <button key={s.v} onClick={()=>setFSt(s.v)}
                   style={{ flexShrink:0, padding:"8px 14px", borderRadius:20, border:`1.5px solid ${fSt===s.v?C.accent:C.border}`, background:fSt===s.v?C.accentBg:C.surface, color:fSt===s.v?C.accent:C.text2, fontSize:13, fontWeight:fSt===s.v?700:400, cursor:"pointer", whiteSpace:"nowrap" }}>
                   {s.l}
@@ -1962,7 +2048,12 @@ export default function App() {
                             <div style={{ display:"flex", flexWrap:"wrap", gap:"4px 12px", marginTop:6, fontSize:12, color:C.text3 }}>
                               {p.elaboration&&<span>📅 Elab: {fmt(p.elaboration)}</span>}
                               {p.expiry&&<span style={{ color:expired_p?C.red:near_p?C.amber:C.text3 }}>⏱ Cad: {fmt(p.expiry)}</span>}
-                              {p.quantity&&<span>📊 {p.quantity} {p.unit}</span>}
+                              {p.quantity!==""&&p.quantity!==null&&p.quantity!==undefined&&(()=>{
+                                const level=stockLevel(p);
+                                const col=level==="low"?C.red:level==="warning"?C.amber:C.green;
+                                const icon=level==="low"?"🔴":level==="warning"?"🟡":"🟢";
+                                return <span style={{ color:col, fontWeight:level==="low"?700:400 }}>{icon} {p.quantity} {p.unit}{p.minStock?` / mín ${p.minStock}`:""}</span>;
+                              })()}
                               {p.lot&&<span>🔢 {p.lot}</span>}
                             </div>
                             {creator&&<div style={{ fontSize:11, color:C.text3, marginTop:4 }}>✍️ {creator.name}</div>}
@@ -1974,7 +2065,7 @@ export default function App() {
                         {[
                           {icon:"🏷", label:"Etiqueta", action:()=>{setSel(p);setModal("label");}, perm:"products"},
                           {icon:"✏️", label:"Editar",   action:()=>{setSel(p);setModal("product");}, perm:"products.edit"},
-                          {icon:"🗑", label:"Borrar",   action:()=>{if(window.confirm("¿Eliminar "+p.name+"?"))deleteProduct(p.id);}, red:true, perm:"products.delete"},
+                          {icon:"🗑", label:"Borrar",   action:()=>showConfirm(`¿Eliminar "${p.name}"?`,()=>deleteProduct(p.id)), red:true, perm:"products.delete"},
                         ].filter(a=>can(currentUser,a.perm)).map(a=>(
                           <button key={a.label} onClick={a.action}
                             style={{ flex:1, padding:"12px 4px", border:"none", background:"transparent", cursor:"pointer", fontSize:12, color:a.red?C.red:C.text2, fontWeight:600, display:"flex", flexDirection:"column", alignItems:"center", gap:3, borderRight:`1px solid ${C.border}` }}>
@@ -2002,7 +2093,7 @@ export default function App() {
               </div>
               :<div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                 {transfers.map(t=>{
-                  const p=products.find(x=>x.id===t.productId), from=restaurants.find(r=>r.id===t.fromRestaurantId), to=restaurants.find(r=>r.id===t.toRestaurantId), u=umap[t.userId];
+                  const p=pmap[t.productId], from=rmap[t.fromRestaurantId], to=rmap[t.toRestaurantId], u=umap[t.userId];
                   return(
                     <div key={t.id} style={{ background:C.surface, borderRadius:16, border:`1px solid ${C.border}`, padding:"14px 16px", boxShadow:"0 1px 3px rgba(0,0,0,.04)" }}>
                       <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
@@ -2119,7 +2210,7 @@ export default function App() {
                   const db2 = (b.date||"")+(b.time||"");
                   return db2.localeCompare(da);
                 }).map((h,i)=>{
-                  const p=products.find(x=>x.id===h.productId), rest=restaurants.find(r=>r.id===h.restaurantId), u=umap[h.userId];
+                  const p=pmap[h.productId], rest=rmap[h.restaurantId], u=umap[h.userId];
                   const TI={
                     created:     {i:"✨",c:C.green,    bg:C.greenBg, l:"Elaboración"},
                     edited:      {i:"✏️",c:C.blue,     bg:C.blueBg,  l:"Edición"},
@@ -2171,68 +2262,68 @@ export default function App() {
             )}
 
             {/* Usuarios */}
-            <div style={{ background:"#fff", borderRadius:14, border:"1px solid #e2e8f0", overflow:"hidden" }}>
-              <div style={{ background:"#1e293b", padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                <div><div style={{ fontWeight:800, fontSize:14, color:"#fff" }}>Usuarios</div><div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{users.length} usuarios · Firman elaboraciones y transferencias</div></div>
+            <div style={{ background:C.surface, borderRadius:14, border:`1px solid ${C.border}`, overflow:"hidden" }}>
+              <div style={{ background:C.dark, padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                <div><div style={{ fontWeight:800, fontSize:14, color:"#fff" }}>Usuarios</div><div style={{ fontSize:11, color:C.text3, marginTop:2 }}>{users.length} usuarios · Firman elaboraciones y transferencias</div></div>
                 <button onClick={()=>{setSel(null);setModal("user");}} style={{ ...B("orange"), fontSize:12, padding:"5px 12px" }}>+ Nuevo</button>
               </div>
               <div style={{ padding:14, display:"grid", gap:7 }}>
                 {users.map(u=>(
-                  <div key={u.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 10px", borderRadius:9, border:"1px solid #f1f5f9", background:"#fafafa" }}>
+                  <div key={u.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 10px", borderRadius:9, border:`1px solid ${C.border}`, background:C.surface2 }}>
                     <div style={{ width:36, height:36, borderRadius:"50%", background:"#1e293b", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, fontWeight:800, color:"#fff", flexShrink:0 }}>{u.name.charAt(0).toUpperCase()}</div>
                     <div style={{ flex:1 }}>
                       <div style={{ fontWeight:700, fontSize:13 }}>{u.name}</div>
-                      <div style={{ fontSize:11, color:"#94a3b8" }}>{u.role||"Sin rol"}{u.restaurantId?` · ${restaurants.find(r=>r.id===u.restaurantId)?.name||""}`:""}</div>
+                      <div style={{ fontSize:11, color:C.text3 }}>{u.role||"Sin rol"}{u.restaurantId?` · ${restaurants.find(r=>r.id===u.restaurantId)?.name||""}`:""}</div>
                     </div>
                     <div style={{ display:"flex", gap:5 }}>
                       <button onClick={()=>{setSel(u);setModal("user");}} style={{ ...B("ghost"), padding:"5px 9px", fontSize:12 }}>✏️</button>
-                      <button onClick={()=>{if(window.confirm(`¿Eliminar usuario "${u.name}"?`))deleteUser(u.id);}} style={{ ...B("red"), padding:"5px 9px", fontSize:12 }}>🗑</button>
+                      <button onClick={()=>{showConfirm(`¿Eliminar usuario "${u.name}"?`, ()=>deleteUser(u.id));}} style={{ ...B("red"), padding:"5px 9px", fontSize:12 }}>🗑</button>
                     </div>
                   </div>
                 ))}
-                {users.length===0&&<div style={{ textAlign:"center", padding:"16px 0", color:"#94a3b8", fontSize:13 }}>Sin usuarios — crea el primero</div>}
+                {users.length===0&&<div style={{ textAlign:"center", padding:"16px 0", color:C.text3, fontSize:13 }}>Sin usuarios — crea el primero</div>}
               </div>
             </div>
 
             {/* Categorías */}
-            <div style={{ background:"#fff", borderRadius:14, border:"1px solid #e2e8f0", overflow:"hidden" }}>
-              <div style={{ background:"#1e293b", padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                <div><div style={{ fontWeight:800, fontSize:14, color:"#fff" }}>Categorías</div><div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{cats.length} categorías</div></div>
+            <div style={{ background:C.surface, borderRadius:14, border:`1px solid ${C.border}`, overflow:"hidden" }}>
+              <div style={{ background:C.dark, padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                <div><div style={{ fontWeight:800, fontSize:14, color:"#fff" }}>Categorías</div><div style={{ fontSize:11, color:C.text3, marginTop:2 }}>{cats.length} categorías</div></div>
                 <button onClick={()=>{setSel(null);setModal("category");}} style={{ ...B("orange"), fontSize:12, padding:"5px 12px" }}>+ Nueva</button>
               </div>
               <div style={{ padding:14, display:"grid", gap:6 }}>
                 {cats.map(c=>{const cnt=products.filter(p=>p.category===c.id).length;return(
-                  <div key={c.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 10px", borderRadius:8, border:"1px solid #f1f5f9", background:"#fafafa" }}>
+                  <div key={c.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 10px", borderRadius:8, border:`1px solid ${C.border}`, background:C.surface2 }}>
                     <span style={{ fontSize:20 }}>{c.icon}</span>
-                    <div style={{ flex:1 }}><div style={{ fontWeight:600, fontSize:13 }}>{c.label}</div><div style={{ fontSize:11, color:"#94a3b8" }}>{cnt} productos</div></div>
+                    <div style={{ flex:1 }}><div style={{ fontWeight:600, fontSize:13 }}>{c.label}</div><div style={{ fontSize:11, color:C.text3 }}>{cnt} productos</div></div>
                     <button onClick={()=>{setSel(c);setModal("category");}} style={{ ...B("ghost"), padding:"4px 8px", fontSize:12 }}>✏️</button>
-                    <button onClick={()=>{if(cats.length<=1)return;if(window.confirm(`¿Eliminar "${c.label}"?`))deleteCategory(c.id);}} style={{ ...B("red"), padding:"4px 8px", fontSize:12 }} disabled={cats.length<=1}>🗑</button>
+                    <button onClick={()=>{if(cats.length<=1)return;showConfirm(`¿Eliminar categoría "${c.label}"?`, ()=>deleteCategory(c.id));}} style={{ ...B("red"), padding:"4px 8px", fontSize:12 }} disabled={cats.length<=1}>🗑</button>
                   </div>
                 );})}
               </div>
             </div>
 
             {/* Catalogo de plantillas */}
-            <div style={{ background:"#fff", borderRadius:14, border:"1px solid #e2e8f0", overflow:"hidden" }}>
-              <div style={{ background:"#1e293b", padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                <div><div style={{ fontWeight:800, fontSize:14, color:"#fff" }}>Catálogo de productos</div><div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{catalog.length} plantillas</div></div>
+            <div style={{ background:C.surface, borderRadius:14, border:`1px solid ${C.border}`, overflow:"hidden" }}>
+              <div style={{ background:C.dark, padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                <div><div style={{ fontWeight:800, fontSize:14, color:"#fff" }}>Catálogo de productos</div><div style={{ fontSize:11, color:C.text3, marginTop:2 }}>{catalog.length} plantillas</div></div>
                 <button onClick={()=>{setSel(null);setModal("catalog");}} style={{ ...B("orange"), fontSize:12, padding:"5px 12px" }}>+ Nueva</button>
               </div>
               <div style={{ padding:14, display:"grid", gap:7 }}>
                 {catalog.length===0 ? (
-                  <div style={{ textAlign:"center", padding:"16px 0", color:"#94a3b8", fontSize:13 }}>Sin plantillas — crea la primera para elaborar productos rapidamente</div>
+                  <div style={{ textAlign:"center", padding:"16px 0", color:C.text3, fontSize:13 }}>Sin plantillas — crea la primera para elaborar productos rapidamente</div>
                 ) : catalog.map(tpl => {
                   const cat = cats.find(c => c.id === tpl.category);
                   return (
-                    <div key={tpl.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"9px 12px", borderRadius:9, border:"1px solid #f1f5f9", background:"#fafafa" }}>
-                      <div style={{ width:38, height:38, borderRadius:9, background:"#f1f5f9", border:"1px solid #e2e8f0", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>{cat?.icon||"📦"}</div>
+                    <div key={tpl.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"9px 12px", borderRadius:9, border:`1px solid ${C.border}`, background:C.surface2 }}>
+                      <div style={{ width:38, height:38, borderRadius:9, background:"#f1f5f9", border:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>{cat?.icon||"📦"}</div>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ fontWeight:700, fontSize:13 }}>{tpl.name}</div>
-                        <div style={{ fontSize:11, color:"#94a3b8" }}>{cat?.label||"—"} · {tpl.unit} · {tpl.defaultDays}d caducidad{tpl.notes ? " · "+tpl.notes.slice(0,20) : ""}</div>
+                        <div style={{ fontSize:11, color:C.text3 }}>{cat?.label||"—"} · {tpl.unit} · {tpl.defaultDays}d caducidad{tpl.notes ? " · "+tpl.notes.slice(0,20) : ""}</div>
                       </div>
                       <div style={{ display:"flex", gap:5 }}>
                         <button onClick={()=>{setSel(tpl);setModal("catalog");}} style={{ ...B("ghost"), padding:"5px 9px", fontSize:12 }}>✏️</button>
-                        <button onClick={()=>{if(window.confirm("¿Eliminar plantilla \""+tpl.name+"\"?"))deleteCatalogItem(tpl.id);}} style={{ ...B("red"), padding:"5px 9px", fontSize:12 }}>🗑</button>
+                        <button onClick={()=>{showConfirm(`¿Eliminar plantilla "${tpl.name}"?`, ()=>deleteCatalogItem(tpl.id));}} style={{ ...B("red"), padding:"5px 9px", fontSize:12 }}>🗑</button>
                       </div>
                     </div>
                   );
@@ -2259,6 +2350,8 @@ export default function App() {
       {modal==="product"&&<ProductModal product={sel?.elaboration?sel:null} restaurants={restaurants} categories={cats} catalog={catalog} currentUser={currentUser} onClose={()=>{setModal(null);setSel(null);}} onSave={saveProduct}/>}
       {modal==="label"&&sel&&<LabelModal product={sel} restaurants={restaurants} categories={cats} users={users} onClose={()=>{setModal(null);setSel(null);}}/>}
       {modal==="transfer"&&<TransferModal products={products} restaurants={restaurants} currentUser={currentUser} onClose={()=>setModal(null)} onSave={saveTransfer}/>}
+      {toast&&<Toast message={toast.message} type={toast.type} onDone={()=>setToast(null)}/>}
+      {confirm&&<ConfirmDialog message={confirm.message} confirmLabel={confirm.label} onConfirm={()=>{confirm.onConfirm();setConfirm(null);}} onCancel={()=>setConfirm(null)}/>}
       {modal==="inventory"&&<InventoryModal restaurants={restaurants} categories={cats} products={products} currentUser={currentUser} onClose={()=>setModal(null)} onSave={saveInventory}/>}
       {modal==="scanner"&&<ScannerModal onClose={()=>setModal(null)} products={products} restaurants={restaurants} users={users} currentUser={currentUser} onSaveTransfer={saveTransfer}/>}
     </div>
@@ -2313,7 +2406,7 @@ function CatalogModal({ item, categories, onClose, onSave }) {
           for (const filter of ["none","contrast(2)","grayscale(1) contrast(2)"]) {
             ctx.filter=filter; ctx.drawImage(img,0,0,w,h);
             const id = ctx.getImageData(0,0,w,h);
-            const r = window.jsQR?.(id.data,w,h,{inversionAttempts:"attemptBoth"});
+            const r = jsQR(id.data,w,h,{inversionAttempts:"attemptBoth"});
             if (r) {
               setProcessing(false);
               // Try to extract product name from QR data
@@ -2490,6 +2583,35 @@ function MasterPinEditor({ masterPin, onSave }) {
   );
 }
 
+// ── Confirm Dialog (replaces window.confirm for mobile) ──────────────────────
+function ConfirmDialog({ message, onConfirm, onCancel, confirmLabel="Sí, eliminar", confirmStyle="red" }) {
+  return (
+    <div style={OVR} onClick={onCancel}>
+      <div style={{ ...MDL, maxWidth:340, textAlign:"center" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ fontSize:36, marginBottom:12 }}>⚠️</div>
+        <div style={{ fontWeight:700, fontSize:16, color:C.text, marginBottom:8 }}>{message}</div>
+        <div style={{ display:"flex", gap:10, marginTop:20 }}>
+          <button onClick={onCancel} style={{ ...B("ghost"), flex:1, fontSize:15, padding:"13px" }}>Cancelar</button>
+          <button onClick={onConfirm} style={{ ...B(confirmStyle), flex:1, fontSize:15, padding:"13px" }}>{confirmLabel}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Toast notification (replaces alert) ──────────────────────────────────────
+function Toast({ message, type="success", onDone }) {
+  useEffect(() => { const t = setTimeout(onDone, 2500); return ()=>clearTimeout(t); }, []);
+  const bg = type==="error"?C.redBg:type==="warning"?C.amberBg:C.greenBg;
+  const co = type==="error"?C.red:type==="warning"?C.amber:C.green;
+  const ic = type==="error"?"✕":type==="warning"?"⚠️":"✓";
+  return (
+    <div style={{ position:"fixed", bottom:24, left:"50%", transform:"translateX(-50%)", zIndex:2000, background:bg, color:co, border:`1px solid ${co}44`, borderRadius:14, padding:"13px 20px", fontWeight:700, fontSize:14, boxShadow:"0 8px 24px rgba(0,0,0,.15)", display:"flex", alignItems:"center", gap:10, whiteSpace:"nowrap", maxWidth:"90vw" }}>
+      <span style={{ fontSize:18 }}>{ic}</span>{message}
+    </div>
+  );
+}
+
 // ── Category inline form ──────────────────────────────────────────────────────
 const EMOJI_LIST = ["🍲","🥣","🥩","🐟","🥦","🍝","🍰","🍞","🫙","🧆","🥤","📦","🥗","🫕","🍜","🥘","🍱","🥚","🧀","🥓","🌮","🍔","🍕","🥙","🧁","🍩","🍪","🎂","🍦","🥛","☕","🫖","🍵","🧃","🌿","🧄","🧅","🥕","🌽","🍅","🫑","🥑","🌾","🧂"];
 
@@ -2526,7 +2648,7 @@ function CategoryForm({ cat, cats, onSave, onDelete, onClose }) {
         )}
         {onDelete && confirmDel && (
           <div style={{ display:"flex", gap:6, flex:1 }}>
-            <button onClick={async ()=>{ if(cats.length<=1){alert("Debe quedar al menos una categoría.");return;} await onDelete(cat.id); onClose(); }} style={{ ...B("red"), flex:1 }}>Sí, eliminar</button>
+            <button onClick={async ()=>{ if(cats.length<=1){showToast("Debe quedar al menos una categoría", "warning"); return;} await onDelete(cat.id); onClose(); }} style={{ ...B("red"), flex:1 }}>Sí, eliminar</button>
             <button onClick={()=>setConfirmDel(false)} style={{ ...B("ghost"), flex:1 }}>No</button>
           </div>
         )}
